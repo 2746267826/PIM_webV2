@@ -41,6 +41,7 @@ export const STORAGE_KEYS = {
   quickNoteDialogPosition: 'pim.quickNoteDialog',
   exhibition: 'pim.exhibition',
   sidebarCollapsed: 'pim.sidebarCollapsed',
+  calendarSkin: 'pim.calendarSkin',
 } as const
 
 export function getString(key: string): string | null {
