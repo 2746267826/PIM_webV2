@@ -85,3 +85,19 @@ export function EChartsBox({ option, height = 260, className, onClickData }: ECh
 
   return <div ref={ref} className={cn('w-full', className)} style={{ height }} />
 }
+
+/** CSS 变量 → 实际色值（ECharts canvas 不解析 var()，标签/系列色需在运行时求值） */
+export function cssVar(name: string, fallback = '#64748B'): string {
+  if (typeof window === 'undefined') return fallback
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return v || fallback
+}
+
+/** 生命周期分类 → 实际色值（图表用；LIFE_CATEGORY_COLOR 存的是变量名） */
+export function resolveCssColors(map: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(map)) {
+    out[k] = v.startsWith('var(') ? cssVar(v.slice(4, -1)) : v
+  }
+  return out
+}

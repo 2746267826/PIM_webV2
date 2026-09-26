@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, ArrowLeft } from 'lucide-react'
 import { useConfirmation, useConfirmationActions, usePendingConfirmations } from '../queries'
 import { DiffTable } from '../components/diff-table'
 import type { OperationConfirmation } from '../types'
@@ -190,8 +190,19 @@ function ConfirmationDetail({ id }: { id: string }) {
 export function ConfirmationsPage() {
   const { data: pending = [], isLoading } = usePendingConfirmations()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  /* 窄屏为推栈导航：不自动选中，由用户点选进入详情 */
+  const [isWide, setIsWide] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : true,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const onChange = () => setIsWide(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   useEffect(() => {
+    if (!isWide) return
     if (!selectedId && pending.length > 0) setSelectedId(pending[0]!.id)
     if (selectedId && !pending.some((p) => p.id === selectedId)) {
       setSelectedId(pending[0]?.id ?? null)
@@ -251,7 +262,7 @@ export function ConfirmationsPage() {
           )}
         </aside>
 
-        {/* 右详情 */}
+        {/* 右详情：≥md 并排；窄屏改为推栈（选中后在整屏详情上展示） */}
         <Card className="hidden min-w-0 flex-1 md:block">
           {selectedId ? (
             <ConfirmationDetail id={selectedId} />
@@ -262,6 +273,26 @@ export function ConfirmationsPage() {
           )}
         </Card>
       </div>
+
+      {/* 窄屏推栈详情：列表隐藏、详情占满，带返回 */}
+      {selectedId != null && (
+        <div className="fixed inset-0 z-40 flex flex-col bg-bg md:hidden">
+          <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
+            <button
+              type="button"
+              aria-label="返回列表"
+              onClick={() => setSelectedId(null)}
+              className="inline-flex items-center gap-1 rounded-ctl px-2 py-1.5 text-[13px] font-medium text-text-2 transition-colors hover:bg-surface outline-none"
+            >
+              <ArrowLeft className="size-4" aria-hidden /> 返回
+            </button>
+            <span className="text-[13px] font-semibold text-text-1">确认详情</span>
+          </div>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <ConfirmationDetail id={selectedId} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

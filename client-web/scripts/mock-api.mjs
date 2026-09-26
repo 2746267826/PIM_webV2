@@ -367,7 +367,7 @@ createServer((req, res) => {
 if (path === '/api/v1/mobile/analytics/charts') {
   const pts = (labels, vals) => labels.map((l, i) => ({ key: String(i), label: l, value: vals[i] }))
   ok(res, [
-    { key: 'category-share', title: '分类占比', chartType: 'pie', unit: 'minutes', points: pts(['聊天', '视频', '其他'], [64, 38, 22]) },
+    { key: 'category-share', title: '分类占比', chartType: 'pie', unit: 'minutes', points: [{ key: '0', label: '聊天', value: 64, lifeCategory: '聊天' }, { key: '1', label: '视频', value: 38, lifeCategory: '视频' }, { key: '2', label: '学习', value: 26, lifeCategory: '学习' }, { key: '3', label: '其他', value: 22, lifeCategory: '其他' }] },
     { key: 'top-apps', title: 'Top App', chartType: 'bar', unit: 'minutes', points: pts(['微信', '抖音', 'B站', '知乎'], [48, 32, 25, 19]) },
     { key: 'daily-total', title: '每日趋势', chartType: 'line', unit: 'minutes', points: pts(Array.from({ length: 7 }, (_, i) => daysAgo(6 - i).slice(0, 10)), Array.from({ length: 7 }, () => Math.round(120 + Math.random() * 160))) },
     { key: 'hour-distribution', title: '小时分布', chartType: 'bar', unit: 'minutes', points: pts(Array.from({ length: 24 }, (_, i) => String(i) + '时'), Array.from({ length: 24 }, () => Math.round(Math.random() * 20))) },

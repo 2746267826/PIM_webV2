@@ -13,7 +13,7 @@ import { mobileApi } from '../api'
 import { todayBusinessDay, businessDayShift, businessDayRange } from '@/lib/businessDay'
 import { LIFE_CATEGORY_COLOR } from '@/lib/enums'
 import { formatDuration, formatTime } from '@/lib/datetime'
-import { EChartsBox } from '@/components/viz/echarts-box'
+import { EChartsBox, resolveCssColors } from '@/components/viz/echarts-box'
 import { Button, Card, CardTitle, Chip, EmptyState, MetricCard, PageHeader, Segmented, Skeleton, StatusBadge } from '@/components/ui'
 import { cn } from '@/lib/utils'
 
@@ -32,7 +32,9 @@ type View = 'usage' | 'liveness'
 type RangeKey = 1 | 7 | 30
 
 function lifeColor(cat: string | null): string {
-  return LIFE_CATEGORY_COLOR[cat as keyof typeof LIFE_CATEGORY_COLOR] ?? 'var(--color-cat-other)'
+  const raw = LIFE_CATEGORY_COLOR[cat as keyof typeof LIFE_CATEGORY_COLOR] ?? 'var(--color-cat-other)'
+  // ECharts canvas 不解析 var()，取实际色值
+  return resolveCssColors({ c: raw }).c
 }
 
 const RANGE_OPTIONS: { value: RangeKey; label: string }[] = [
@@ -268,16 +270,30 @@ function BlockSessions({ blockId, range }: { blockId: string; range: Record<stri
   )
 }
 
+/** 分类色序列（服务端未给 lifeCategory 时按序取用，保证多色可辨） */
+const CATEGORY_FALLBACK_PALETTE = ['#2563EB', '#16A34A', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#64748B']
+
 /** 服务端图表 DTO → ECharts option */
 function chartToOption(c: { chartType: string; points: { label: string; value: number; lifeCategory?: string | null }[] }) {
   if (c.chartType === 'pie' || c.chartType === 'category-share') {
+    const hasCategories = c.points.some((p) => p.lifeCategory)
     return {
       tooltip: {},
+      legend: { bottom: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 10, color: '#64748B' } },
       series: [{
         type: 'pie',
-        radius: ['45%', '72%'],
+        radius: ['45%', '70%'],
+        center: ['50%', '44%'],
         label: { show: false },
-        data: c.points.map((p) => ({ name: p.label, value: Math.round(p.value), itemStyle: { color: lifeColor(p.lifeCategory ?? null) } })),
+        data: c.points.map((p, i) => ({
+          name: p.label,
+          value: Math.round(p.value),
+          itemStyle: {
+            color: hasCategories
+              ? lifeColor(p.lifeCategory ?? null)
+              : CATEGORY_FALLBACK_PALETTE[i % CATEGORY_FALLBACK_PALETTE.length],
+          },
+        })),
       }],
     }
   }

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { EChartsBox } from '@/components/viz/echarts-box'
 import { DayGanttBars } from '@/components/viz/day-gantt-bars'
-import { KeyboardMatrix, MouseMatrix } from '@/components/viz/keyboard-matrix'
+import { KeyboardMatrix } from '@/components/viz/keyboard-matrix'
+import { MouseHeatmap } from '@/components/viz/mouse-heatmap'
 import {
   useActivityAnalysis,
   useAppUsage,
@@ -261,12 +262,13 @@ export function PcTrackerPage() {
         </div>
         <div className="mt-3 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
           <KeyboardMatrix keyCounts={ks?.keyPressCounts ?? {}} />
-          <MouseMatrix
+          <MouseHeatmap
             left={ks?.leftClicks ?? 0}
             middle={0}
             right={ks?.rightClicks ?? 0}
             sideBack={0}
             sideForward={0}
+            scrollDistance={ks?.scrollDistance}
           />
         </div>
       </Card>
