@@ -6,12 +6,10 @@ import { dayEndIso, dayStartIso } from '@/lib/datetime'
 import { MiniDayCalendar } from './mini-day-calendar'
 import type { CalendarVariant, MiniEvent } from './mini-day-calendar'
 import { Button, Card, CardTitle, PageHeader, StatusBadge } from '@/components/ui'
-import { cn } from '@/lib/utils'
 
 /*
- * 日历样式提案 · 第二轮（自绘高保真）：
- * 三种成熟日历产品的视觉语言，预览即所得；选定后正式日历按该语言深度定制
- * （FullCalendar 的 chrome/事件渲染完全可自定义到接近自绘效果，交互零回归）。
+ * 日历样式提案 · 十种大厂成熟风格。
+ * 同一份数据、自绘高保真预览（重叠均分列宽，绝不遮盖）；选定后正式日历仍只改样式层。
  */
 
 const LAYER_COLORS: Record<string, string> = {
@@ -26,38 +24,76 @@ const PROPOSALS: {
   title: string
   ref: string
   desc: string
-  traits: string[]
-  /** 当前正式日历采用的方案 */
+  liked?: boolean
   current?: boolean
 }[] = [
   {
-    variant: 'glass',
-    title: '玻璃 · 饱和渐变',
-    ref: '当前方案（对照）',
-    desc: '上一轮选定的饱和色块。以下三个变体保留玻璃的圆角与层次，但把中间颜色置空、只留边缘色彩。',
-    traits: ['饱和渐变块 + 白字', '色彩冲击力最强', '大色块视觉偏重'],
-    current: true,
-  },
-  {
-    variant: 'frost',
-    title: '霜 · 浅底左条',
-    ref: '玻璃的"褪色"版',
-    desc: '中间置空为 8% 的极浅同色底，色彩只保留左缘 3px 色条；深色文字。保留一点色彩气氛，但不压任何内容。',
-    traits: ['8% 浅底 + 左色条', '深色文字，可读性最好', '无投影，视觉轻', '月视图小格子里也干净'],
-  },
-  {
     variant: 'fade',
     title: '晕 · 左浓右淡',
-    ref: '字面意义的"中间置空"',
-    desc: '左缘 32% 色浓度向右渐隐到透明——颜色像从左边渗进来一样。保留玻璃的色彩感，但中间完全留白。',
-    traits: ['水平渐变：左浓 → 中间渐白', '左色条 + 深字', '最有"渐变玻璃"的残影', '事件重叠时分列效果自然'],
+    ref: 'Google Calendar「未确认邀请」语言',
+    desc: '你点赞的那款。左缘色浓度向右渐隐，中间留白。',
+    liked: true,
   },
   {
-    variant: 'outline',
-    title: '框 · 彩色描边',
-    ref: '最轻的一档',
-    desc: '纯白底 + 1.5px 彩色描边，色彩只出现在边框和时间上；无底色无投影。整页最清爽，日历本多时也不花。',
-    traits: ['白底 + 彩色描边', '时间文字用日历本色', '色彩存在感最低', '适合事件密集的日程'],
+    variant: 'gcal-bar',
+    title: '谷歌竖条',
+    ref: 'Google Calendar 日视图',
+    desc: 'Google Calendar 日/周视图的标准事件：左侧宽竖条 + 白底 + 轻投影。辨识度极高，全世界最熟悉的日历语言。',
+  },
+  {
+    variant: 'gcal-dot',
+    title: '谷歌圆点行',
+    ref: 'Google Calendar 月视图',
+    desc: '月视图语言放进日视图：无块感，彩色圆点 + 标题一行。页面最"素"，多事件时最清爽。',
+  },
+  {
+    variant: 'notion',
+    title: 'Notion 色条',
+    ref: 'Notion Calendar',
+    desc: '3px 色条 + 8% 同色底、小圆角。Notion Calendar 的标志性克制。',
+  },
+  {
+    variant: 'outlook',
+    title: 'Outlook 浅块',
+    ref: 'Microsoft 365 新版',
+    desc: '18% 同色浅块 + 4px 左条、直角。微软新办公套件的正式感，色块比 Google 饱满、比玻璃轻。',
+  },
+  {
+    variant: 'apple',
+    title: '苹果浅渐变',
+    ref: 'Apple Calendar / Fantastical 月视图',
+    desc: '自上而下的浅色渐变（16% → 30%），无左条，圆角 6。macOS 原生日历的柔和质感。',
+  },
+  {
+    variant: 'linear',
+    title: 'Linear 圆点行',
+    ref: 'Linear Schedule',
+    desc: '完全无块：彩色圆点 + 标题 + 右侧淡时间一行。工程团队审美，密度最高。',
+  },
+  {
+    variant: 'ticktick',
+    title: '胶囊细边',
+    ref: '滴答清单',
+    desc: '白底胶囊 + 发丝边框，色彩只在时间上。圆润友好，国内工具的常见语言。',
+  },
+  {
+    variant: 'feishu',
+    title: '飞书浅块',
+    ref: '飞书 / Lark 日历',
+    desc: '12% 同色浅块 + 3px 左条、圆角 6。介于谷歌竖条与 Notion 之间，平衡感好。',
+  },
+  {
+    variant: 'stripe',
+    title: '顶条白块',
+    ref: 'Stripe Dashboard / Cron 列表',
+    desc: '白底 + hairline 边框 + 顶部 2px 色条，时间用日历本色加粗。仪表盘气质，和浅色效率主题最搭。',
+  },
+  {
+    variant: 'glass',
+    title: '玻璃 · 饱和渐变',
+    ref: '当前正式方案（对照）',
+    desc: '饱和渐变大色块，保留在此作对照。',
+    current: true,
   },
 ]
 
@@ -85,7 +121,6 @@ export function CalendarStylesPage() {
         start: item.startsAt,
         end: item.endsAt,
         color: LAYER_COLORS[item.layer] ?? item.color,
-        muted: item.layer === 'availability',
       })
     }
     return list
@@ -93,60 +128,46 @@ export function CalendarStylesPage() {
 
   function choose(variant: CalendarVariant, title: string) {
     setJSON(STORAGE_KEYS.calendarSkin, variant)
-    notifySuccess(`已记录选择：${title}`, '正式日历将按该视觉语言深度定制')
+    notifySuccess(`已记录选择：${title}`, '正式日历将按该语言定制（只改样式层，交互不变）')
   }
 
   return (
     <div>
       <PageHeader
-        title="日历样式提案"
-        subtitle="视觉语言对比（自绘高保真预览）；正式日历已采用「玻璃」方案（FullCalendar 定制，逻辑全部来自库）"
+        title="日历样式提案 · 十种大厂风格"
+        subtitle="同一份今日数据、自绘高保真预览（重叠事件均分列宽，绝不遮盖）；选定后正式日历只改样式层，库能力与交互不变"
       />
 
-      <div className="space-y-5">
-        {PROPOSALS.map((p, index) => (
-          <Card key={p.variant} className="overflow-hidden">
-            <div className={cn('grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]', index % 2 === 1 && 'lg:grid-cols-[360px_minmax(0,1fr)]')}>
-              {/* 文案区 */}
-              <div className="p-5 lg:p-6">
-                <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle className="text-base">{p.title}</CardTitle>
-                  <StatusBadge tone="info" dot={false}>{p.ref}</StatusBadge>
-                  {p.current && <StatusBadge tone="ok">当前</StatusBadge>}
-                </div>
-                <p className="mt-2 max-w-[52ch] text-[13px] leading-5 text-text-2">{p.desc}</p>
-                <ul className="mt-3 space-y-1.5">
-                  {p.traits.map((t) => (
-                    <li key={t} className="flex items-start gap-2 text-[13px] text-text-2">
-                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
-                      {t}
-                    </li>
-                  ))}
-                </ul>
-                {!p.current && (
-                  <Button variant="primary" size="sm" className="mt-4" onClick={() => choose(p.variant, p.title)}>
-                    选用此方案
-                  </Button>
-                )}
-              </div>
-
-              {/* 预览区 */}
-              <div className={cn('border-t border-divider bg-surface p-4 lg:border-t-0', index % 2 === 1 ? 'lg:order-first lg:border-r' : 'lg:border-l')}>
-                <MiniDayCalendar variant={p.variant} events={miniEvents} />
-              </div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {PROPOSALS.map((p) => (
+          <Card key={p.variant} className="overflow-hidden p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-[15px]">{p.title}</CardTitle>
+              <StatusBadge tone="info" dot={false}>{p.ref}</StatusBadge>
+              {p.liked && <StatusBadge tone="warn" dot={false}>你点赞</StatusBadge>}
+              {p.current && <StatusBadge tone="ok">当前</StatusBadge>}
             </div>
+            <p className="mt-1.5 text-[13px] leading-5 text-text-2">{p.desc}</p>
+            <div className="mt-3">
+              <MiniDayCalendar variant={p.variant} events={miniEvents} />
+            </div>
+            {!p.current && (
+              <Button variant="primary" size="sm" className="mt-3" onClick={() => choose(p.variant, p.title)}>
+                选用此方案
+              </Button>
+            )}
           </Card>
         ))}
-
-        <Card className="p-4">
-          <CardTitle className="text-[13px]">说明</CardTitle>
-          <p className="mt-1.5 text-[13px] text-text-3">
-            四张卡为同一份数据的自绘渲染（重叠自动分列、现在时刻线）。三个"置空"变体选定后，
-            正式日历同样只改样式层（CSS + 事件渲染函数），拖选/拖放/月视图等交互与库能力不变。
-            想要更淡/更浓的梯度、或条的位置换到顶部/右侧，说一声即可继续出新。
-          </p>
-        </Card>
       </div>
+
+      <Card className="mt-4 p-4">
+        <CardTitle className="text-[13px]">说明</CardTitle>
+        <p className="mt-1.5 text-[13px] text-text-3">
+          无论选哪种，日历的拖选建日程、收件箱拖入排期、月视图、重叠事件自动分列等能力都来自
+          FullCalendar（成熟库），我们只改事件与网格的视觉层。也可以混搭（如"谷歌竖条 + 晕的渐变"）
+          或调整参数（条宽、浓度、圆角、字号），随时说。
+        </p>
+      </Card>
     </div>
   )
 }

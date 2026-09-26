@@ -2,20 +2,25 @@ import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 
 /*
- * 高保真日视觉提案（自绘，预览即所得）：
- * 三种视觉语言 —— amber（Amie 式柔和渐变）/ ink（Notion 式极简色条）/ glass（Fantastical 式饱和渐变）。
- * 重叠事件按簇分列排布；含现在时刻指示线。
+ * 高保真日视觉提案（自绘，预览即所得）。
+ * 十种大厂成熟风格 + 历史提案；重叠事件按簇均分列宽（绝不遮盖，有单测）。
  */
 
 export type CalendarVariant =
+  | 'fade' // 晕 · 左浓右淡（Google Calendar 渐变确认风）
+  | 'gcal-bar' // 谷歌竖条（Google Calendar 日视图）
+  | 'gcal-dot' // 谷歌圆点（Google Calendar 月视图语言）
+  | 'notion' // Notion Calendar 色条
+  | 'outlook' // Microsoft 365 新版浅块
+  | 'apple' // Apple Calendar 浅渐变
+  | 'linear' // Linear Schedule 圆点行
+  | 'ticktick' // 滴答清单胶囊
+  | 'feishu' // 飞书日历浅块
+  | 'stripe' // Stripe Dashboard 顶条白块
+  | 'glass' // 玻璃（当前正式方案）
   | 'amber'
   | 'ink'
-  | 'glass'
-  /** 霜：极浅 tint 底 + 左色条（中间基本置空） */
   | 'frost'
-  /** 晕：左浓右淡的水平渐变（颜色向中间渐白） */
-  | 'fade'
-  /** 框：白底 + 彩色描边（色彩只在边框与时间上） */
   | 'outline'
 
 export interface MiniEvent {
@@ -24,12 +29,14 @@ export interface MiniEvent {
   start: string
   end: string
   color: string
-  muted?: boolean
 }
 
 const START_HOUR = 6
-const END_HOUR = 24
-const PX_PER_HOUR = 44
+const END_HOUR = 22
+export const PX_PER_HOUR = 40
+
+export const GRID_GUTTER_PX = 52
+export const GRID_EDGE_PX = 6
 
 interface Column {
   event: MiniEvent
@@ -39,8 +46,8 @@ interface Column {
   height: number
 }
 
-/** 重叠事件 → 簇内分列（简单贪心） */
-function layout(events: MiniEvent[], now: Date): Column[] {
+/** 重叠事件 → 簇内分列（贪心；导出供单测验证分列正确性） */
+export function layoutColumns(events: MiniEvent[]): Column[] {
   const parsed = events
     .map((e) => ({ ...e, s: new Date(e.start), en: new Date(e.end) }))
     .filter((e) => e.en.getTime() > e.s.getTime())
@@ -76,18 +83,92 @@ function layout(events: MiniEvent[], now: Date): Column[] {
       out.push({ event: e, column: col, columns: colEnds.length, top: Math.max(0, top), height: Math.max(20, rawH - 3) })
     }
   }
-
-  // 现在时刻线特殊处理在渲染层
-  void now
   return out
+}
+
+/** 列定位：簇内均分宽度（calc+百分比，列间自然留缝） */
+function columnInset(column: number, columns: number): { left: string; right: string } {
+  const span = `(100% - ${GRID_GUTTER_PX + GRID_EDGE_PX}px)`
+  return {
+    left: `calc(${GRID_GUTTER_PX}px + ${span} * ${column / columns})`,
+    right: `calc(${GRID_EDGE_PX}px + ${span} * ${(columns - 1 - column) / columns})`,
+  }
 }
 
 function timeLabel(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-const VARIANT_EVENT: Record<CalendarVariant, (e: MiniEvent, c: Column) => React.CSSProperties> = {
-  // 琥珀：柔和同色系渐变块，圆角大，带同色投影
+/* ── 变体容器样式 ─────────────────────────────────────────── */
+
+const VARIANT_EVENT: Record<CalendarVariant, (e: MiniEvent) => React.CSSProperties> = {
+  fade: (e) => ({
+    background: `linear-gradient(90deg, ${hexAlpha(e.color, 0.32)} 0%, ${hexAlpha(e.color, 0.07)} 45%, transparent 90%)`,
+    borderLeft: `3px solid ${e.color}`,
+    borderRadius: 8,
+    color: 'var(--color-text-1)',
+  }),
+  'gcal-bar': (e) => ({
+    background: 'var(--color-bg)',
+    borderLeft: `9px solid ${e.color}`,
+    borderRadius: 3,
+    boxShadow: '0 1px 2px rgba(15,23,42,.10)',
+    color: 'var(--color-text-1)',
+  }),
+  'gcal-dot': () => ({
+    background: 'transparent',
+    borderRadius: 4,
+    color: 'var(--color-text-1)',
+  }),
+  notion: (e) => ({
+    background: hexAlpha(e.color, 0.08),
+    borderLeft: `3px solid ${e.color}`,
+    borderRadius: 4,
+    color: 'var(--color-text-1)',
+  }),
+  outlook: (e) => ({
+    background: hexAlpha(e.color, 0.18),
+    borderLeft: `4px solid ${e.color}`,
+    borderRadius: 2,
+    color: 'var(--color-text-1)',
+  }),
+  apple: (e) => ({
+    background: `linear-gradient(180deg, ${hexAlpha(e.color, 0.16)}, ${hexAlpha(e.color, 0.30)})`,
+    borderRadius: 6,
+    color: 'var(--color-text-1)',
+  }),
+  linear: () => ({
+    background: 'transparent',
+    borderRadius: 4,
+    color: 'var(--color-text-1)',
+  }),
+  ticktick: () => ({
+    background: 'var(--color-bg)',
+    border: '1px solid var(--color-border)',
+    borderRadius: 999,
+    color: 'var(--color-text-1)',
+  }),
+  feishu: (e) => ({
+    background: hexAlpha(e.color, 0.12),
+    borderLeft: `3px solid ${e.color}`,
+    borderRadius: 6,
+    color: 'var(--color-text-1)',
+  }),
+  stripe: (e) => ({
+    background: 'var(--color-bg)',
+    borderTop: `2px solid ${e.color}`,
+    border: '1px solid var(--color-border)',
+    borderTopWidth: 2,
+    borderTopColor: e.color,
+    borderRadius: 6,
+    color: 'var(--color-text-1)',
+  }),
+  glass: (e) => ({
+    background: `linear-gradient(180deg, ${lighten(e.color, 0.18)}, ${e.color})`,
+    borderRadius: 8,
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,.35), 0 2px 6px ${hexAlpha(e.color, 0.35)}`,
+    color: '#ffffff',
+  }),
   amber: (e) => ({
     background: `linear-gradient(160deg, ${hexAlpha(e.color, 0.22)}, ${hexAlpha(e.color, 0.13)})`,
     borderLeft: `3px solid ${e.color}`,
@@ -95,7 +176,6 @@ const VARIANT_EVENT: Record<CalendarVariant, (e: MiniEvent, c: Column) => React.
     boxShadow: `0 2px 8px ${hexAlpha(e.color, 0.18)}`,
     color: 'var(--color-text-1)',
   }),
-  // 墨线：白底极简，左色条 3px，发丝边
   ink: (e) => ({
     background: 'var(--color-bg)',
     borderLeft: `3px solid ${e.color}`,
@@ -104,28 +184,12 @@ const VARIANT_EVENT: Record<CalendarVariant, (e: MiniEvent, c: Column) => React.
     borderLeftWidth: 3,
     color: 'var(--color-text-1)',
   }),
-  // 玻璃：饱和实色渐变、白字、顶部高光
-  glass: (e) => ({
-    background: `linear-gradient(180deg, ${lighten(e.color, 0.18)}, ${e.color})`,
-    borderRadius: 8,
-    boxShadow: `inset 0 1px 0 rgba(255,255,255,.35), 0 2px 6px ${hexAlpha(e.color, 0.35)}`,
-    color: '#ffffff',
-  }),
-  // 霜：中间置空的极浅 tint（8%）+ 左色条 + 深字
   frost: (e) => ({
     background: hexAlpha(e.color, 0.08),
     borderLeft: `3px solid ${e.color}`,
     borderRadius: 8,
     color: 'var(--color-text-1)',
   }),
-  // 晕：左浓右淡的水平渐变——左缘有色、向中间渐白（字面意义的"中间置空"）
-  fade: (e) => ({
-    background: `linear-gradient(90deg, ${hexAlpha(e.color, 0.32)} 0%, ${hexAlpha(e.color, 0.07)} 45%, transparent 90%)`,
-    borderLeft: `3px solid ${e.color}`,
-    borderRadius: 8,
-    color: 'var(--color-text-1)',
-  }),
-  // 框：纯白底 + 1.5px 彩色描边，色彩只出现在边框与时间上
   outline: (e) => ({
     background: 'var(--color-bg)',
     border: `1.5px solid ${e.color}`,
@@ -134,12 +198,34 @@ const VARIANT_EVENT: Record<CalendarVariant, (e: MiniEvent, c: Column) => React.
   }),
 }
 
+/** 事件内容的结构差异：标准（时间+标题）/ 圆点行 / 彩色时间 */
+type ContentKind = 'std' | 'dot' | 'colortime'
+
+const VARIANT_CONTENT: Record<CalendarVariant, ContentKind> = {
+  fade: 'std',
+  'gcal-bar': 'std',
+  'gcal-dot': 'dot',
+  notion: 'std',
+  outlook: 'std',
+  apple: 'std',
+  linear: 'dot',
+  ticktick: 'dot',
+  feishu: 'std',
+  stripe: 'colortime',
+  glass: 'std',
+  amber: 'std',
+  ink: 'std',
+  frost: 'std',
+  outline: 'colortime',
+}
+
 /** 事件时间文字的颜色（变体各自的语言） */
-export function variantTimeColor(variant: CalendarVariant, eventColor: string): string {
+function timeColor(variant: CalendarVariant, eventColor: string): string {
   switch (variant) {
     case 'glass':
       return 'rgba(255,255,255,.8)'
     case 'outline':
+    case 'stripe':
       return eventColor
     default:
       return 'var(--color-text-3)'
@@ -170,94 +256,81 @@ export function MiniDayCalendar({
   className?: string
 }) {
   const now = useMemo(() => new Date(), [])
-  const columns = useMemo(() => layout(events, now), [events, now])
+  const columns = useMemo(() => layoutColumns(events), [events])
   const hours = useMemo(
     () => Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i),
     [],
   )
+  const contentKind = VARIANT_CONTENT[variant]
 
-  const nowVisible =
-    now.getHours() >= START_HOUR && now.getHours() < END_HOUR
+  const nowVisible = now.getHours() >= START_HOUR && now.getHours() < END_HOUR
   const nowTop = (now.getHours() + now.getMinutes() / 60 - START_HOUR) * PX_PER_HOUR
 
   return (
     <div
       className={cn(
         'relative select-none overflow-hidden rounded-card border border-border bg-bg',
-        variant === 'ink' && 'shadow-none',
         className,
       )}
     >
       {/* 头部日期 */}
-      <div
-        className={cn(
-          'flex items-baseline gap-2 border-b px-4 py-2.5',
-          variant === 'ink' ? 'border-divider' : 'border-divider bg-surface/60',
-        )}
-      >
-        <span
-          className={cn(
-            'tnum font-semibold',
-            variant === 'amber' ? 'text-[22px] leading-7 text-text-1' : 'text-[18px] leading-6 text-text-1',
-          )}
-        >
-          26
-        </span>
+      <div className="flex items-baseline gap-2 border-b border-divider bg-surface/60 px-4 py-2.5">
+        <span className="tnum text-[18px] leading-6 font-semibold text-text-1">26</span>
         <span className="text-xs text-text-3">星期六</span>
-        {variant === 'amber' && (
-          <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-fg">今天</span>
-        )}
       </div>
 
       {/* 时间网格 */}
       <div className="relative" style={{ height: (END_HOUR - START_HOUR) * PX_PER_HOUR }}>
         {hours.map((h) => (
-          <div
-            key={h}
-            className="absolute inset-x-0"
-            style={{ top: (h - START_HOUR) * PX_PER_HOUR }}
-          >
-            <div
-              className={cn(
-                'border-t',
-                variant === 'ink' ? 'border-divider' : 'border-divider/70 border-dashed',
-              )}
-            />
-            <span
-              className={cn(
-                'tnum absolute -top-2 w-10 text-right',
-                variant === 'ink' ? 'left-0 pr-2 text-[10px] text-text-4' : 'left-1 text-[10px] text-text-4',
-              )}
-            >
+          <div key={h} className="absolute inset-x-0" style={{ top: (h - START_HOUR) * PX_PER_HOUR }}>
+            <div className={cn('border-t', variant === 'ink' ? 'border-divider' : 'border-divider/70 border-dashed')} />
+            <span className="tnum absolute -top-2 left-1 text-[10px] text-text-4">
               {String(h).padStart(2, '0')}:00
             </span>
           </div>
         ))}
 
-        {/* 事件块 */}
+        {/* 事件块（簇内均分列宽，绝不重叠遮盖） */}
         {columns.map(({ event: e, column, columns: cols, top, height }) => {
-          const left = 52 + column * (12 / cols)
-          const right = 6 + (cols - 1 - column) * (12 / cols)
-          const short = height < 34
+          const { left, right } = columnInset(column, cols)
           const startD = new Date(e.start)
+          const short = height < 32
           return (
             <div
               key={e.id}
-              className="absolute overflow-hidden px-2 py-1"
-              style={{
-                top,
-                height,
-                left,
-                right,
-                ...VARIANT_EVENT[variant](e, { event: e, column, columns: cols, top, height }),
-              }}
+              className="absolute flex flex-col justify-center overflow-hidden px-2 py-0.5"
+              style={{ top, height, left, right, ...VARIANT_EVENT[variant](e) }}
             >
-              <div className={cn('truncate font-medium', short ? 'text-[11px] leading-[18px]' : 'text-[12px] leading-4')}>
-                {e.title}
-              </div>
-              {!short && (
-                <div className="tnum text-[10px] leading-3" style={{ color: variantTimeColor(variant, e.color) }}>
-                  {timeLabel(startD)}
+              {contentKind === 'dot' ? (
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: e.color }} aria-hidden />
+                  <span className="truncate text-[12px] leading-4 font-medium">{e.title}</span>
+                  <span className="tnum ml-auto shrink-0 text-[10px] text-text-4">{timeLabel(startD)}</span>
+                </div>
+              ) : contentKind === 'colortime' ? (
+                <div className="min-w-0">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="tnum text-[10px] font-semibold" style={{ color: e.color }}>
+                      {timeLabel(startD)}
+                    </span>
+                    <span className={cn('truncate font-semibold', short ? 'text-[11px] leading-4' : 'text-[12px] leading-4')}>
+                      {e.title}
+                    </span>
+                  </div>
+                  {!short && height > 48 && (
+                    <div className="truncate text-[10px] leading-3 text-text-4">{e.end.slice(11, 16)}</div>
+                  )}
+                </div>
+              ) : (
+                <div className="min-w-0">
+                  {!short && (
+                    <div className="tnum text-[10px] leading-3" style={{ color: timeColor(variant, e.color) }}>
+                      {timeLabel(startD)}
+                    </div>
+                  )}
+                  <div className={cn('truncate font-semibold', short ? 'text-[11px] leading-[18px]' : 'text-[12px] leading-4')}>
+                    {e.title}
+                  </div>
                 </div>
               )}
             </div>
