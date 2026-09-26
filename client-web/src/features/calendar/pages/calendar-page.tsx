@@ -8,6 +8,7 @@ import zhCnLocale from '@fullcalendar/core/locales/zh-cn'
 import type { DatesSetArg, EventClickArg } from '@fullcalendar/core'
 import { CalendarPlus, ChevronLeft, ChevronRight, Inbox, Paintbrush } from 'lucide-react'
 import { Link } from 'react-router'
+import '../styles/calendar-skins.css'
 import { useCalendarVisibility } from '../calendar-visibility'
 import { useCalendars, useEvents, useLayers, usePlanTask, useTaskBooks } from '../queries'
 import { EventEditorDialog } from '../components/event-editor-dialog'
@@ -84,7 +85,7 @@ export function CalendarPage() {
           end: ev.dtEnd,
           allDay: ev.isAllDay,
           backgroundColor: color,
-          borderColor: color,
+          borderColor: 'transparent',
           extendedProps: { kind: 'event', event: ev, cancelled: ev.isCancelled, repeated: Boolean(ev.rrule) || ev.isSeriesMaster },
         })
       }
@@ -202,7 +203,7 @@ export function CalendarPage() {
 
       {/* 日历主体 + 收件箱侧板 */}
       <div className="flex min-h-0 flex-1 gap-4">
-        <div className="min-w-0 flex-1">
+        <div className="skin-glass min-w-0 flex-1">
           <FullCalendar
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -217,6 +218,7 @@ export function CalendarPage() {
             droppable
             drop={onDrop}
             eventClick={onEventClick}
+            eventDisplay="block"
             height="auto"
             allDaySlot
             nowIndicator
@@ -224,18 +226,39 @@ export function CalendarPage() {
             slotMaxTime="24:00:00"
             firstDay={1}
             eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
-            eventContent={(arg) => (
-              <div className="flex min-w-0 items-center gap-1 overflow-hidden px-0.5 text-[11px] leading-4">
-                {arg.event.extendedProps.cancelled ? (
-                  <span className="truncate line-through opacity-60">{arg.event.title}</span>
-                ) : (
-                  <>
-                    {arg.event.extendedProps.repeated && <span aria-hidden>↻</span>}
-                    <span className="truncate">{arg.event.title}</span>
-                  </>
-                )}
-              </div>
-            )}
+            eventContent={(arg) => {
+              const cancelled = arg.event.extendedProps.cancelled as boolean | undefined
+              const repeated = arg.event.extendedProps.repeated as boolean | undefined
+              const short =
+                arg.event.start && arg.event.end &&
+                arg.event.end.getTime() - arg.event.start.getTime() < 45 * 60_000
+              return (
+                <div className="flex h-full min-w-0 flex-col justify-center overflow-hidden rounded-[inherit] px-1.5 py-0.5">
+                  {cancelled ? (
+                    <span className="truncate text-[11px] leading-4 font-medium text-white line-through opacity-70">
+                      {arg.event.title}
+                    </span>
+                  ) : (
+                    <>
+                      {short ? (
+                        <span className="truncate text-[11px] leading-4 font-semibold">
+                          {repeated && <span className="mr-0.5 font-normal opacity-90">↻</span>}
+                          {arg.event.title}
+                        </span>
+                      ) : (
+                        <>
+                          <span className="tnum text-[10px] leading-3 text-white/80">{arg.timeText}</span>
+                          <span className="truncate text-[11px] leading-4 font-semibold">
+                            {repeated && <span className="mr-0.5 font-normal opacity-90">↻</span>}
+                            {arg.event.title}
+                          </span>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              )
+            }}
           />
         </div>
 

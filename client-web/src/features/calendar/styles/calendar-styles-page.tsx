@@ -89,8 +89,8 @@ export function CalendarStylesPage() {
   return (
     <div>
       <PageHeader
-        title="日历样式提案 · 第二轮"
-        subtitle="三种成熟日历产品的视觉语言（自绘高保真，预览即所得）；点击「选用此方案」后正式日历按该语言定制"
+        title="日历样式提案"
+        subtitle="视觉语言对比（自绘高保真预览）；正式日历已采用「玻璃」方案（FullCalendar 定制，逻辑全部来自库）"
       />
 
       <div className="space-y-5">
@@ -102,6 +102,7 @@ export function CalendarStylesPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle className="text-base">{p.title}</CardTitle>
                   <StatusBadge tone="info" dot={false}>{p.ref}</StatusBadge>
+                  {p.variant === 'glass' && <StatusBadge tone="ok">已选用</StatusBadge>}
                 </div>
                 <p className="mt-2 max-w-[52ch] text-[13px] leading-5 text-text-2">{p.desc}</p>
                 <ul className="mt-3 space-y-1.5">
