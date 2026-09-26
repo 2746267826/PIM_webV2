@@ -39,12 +39,14 @@ const PROPOSALS: {
     title: '谷歌竖条',
     ref: 'Google Calendar 日视图',
     desc: 'Google Calendar 日/周视图的标准事件：左侧宽竖条 + 白底 + 轻投影。辨识度极高，全世界最熟悉的日历语言。',
+    current: true,
   },
   {
     variant: 'gcal-dot',
     title: '谷歌圆点行',
     ref: 'Google Calendar 月视图',
     desc: '月视图语言放进日视图：无块感，彩色圆点 + 标题一行。页面最"素"，多事件时最清爽。',
+    current: true,
   },
   {
     variant: 'notion',
@@ -135,7 +137,7 @@ export function CalendarStylesPage() {
     <div>
       <PageHeader
         title="日历样式提案 · 十种大厂风格"
-        subtitle="同一份今日数据、自绘高保真预览（重叠事件均分列宽，绝不遮盖）；选定后正式日历只改样式层，库能力与交互不变"
+        subtitle="已选定：日视图「谷歌竖条」+ 月视图「谷歌圆点行」（正式日历已应用，仅样式层，库能力与交互不变）"
       />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

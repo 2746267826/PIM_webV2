@@ -153,3 +153,74 @@
 .skin-glass .fc-daygrid-event {
   background-image: linear-gradient(180deg, rgb(255 255 255 / 0.32), rgb(255 255 255 / 0) 45%);
 }
+
+/* ── 皮肤 · 谷歌（正式采用）─────────────────────────────
+   日视图 = Google Calendar 竖条事件；月视图 = GCal 圆点行。
+   每事件的颜色由 FullCalendar 写入元素级变量 --fc-event-bg-color，
+   左条/圆点直接引用它——无需逐事件写 CSS。日历逻辑全部来自库。 */
+.skin-gcal .fc {
+  --fc-border-color: var(--color-border);
+  --fc-today-bg-color: var(--color-primary-soft);
+  --fc-page-bg-color: var(--color-bg);
+  --fc-neutral-bg-color: var(--color-surface);
+  --fc-now-indicator-color: var(--color-crit);
+}
+.skin-gcal .fc-theme-standard .fc-scrollgrid {
+  border: none;
+}
+.skin-gcal .fc-theme-standard td,
+.skin-gcal .fc-theme-standard th {
+  border-color: var(--color-divider);
+}
+.skin-gcal .fc-col-header-cell-cushion {
+  color: var(--color-text-2);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 4px;
+  text-decoration: none;
+}
+.skin-gcal .fc-timegrid-col.fc-day-today,
+.skin-gcal .fc-daygrid-day.fc-day-today {
+  background: var(--color-primary-soft) !important;
+}
+.skin-gcal .fc-timegrid-slot {
+  height: 2.2em;
+}
+.skin-gcal .fc-timegrid-slot-label-cushion {
+  color: var(--color-text-4);
+  font-size: 11px;
+}
+.skin-gcal .fc-timegrid-divider {
+  display: none;
+}
+/* 日视图事件：白底 + 左缘 9px 日历色竖条 + 圆角 3 + 轻投影 */
+.skin-gcal .fc-timegrid-event {
+  background: #ffffff !important;
+  border: none !important;
+  border-left: 9px solid var(--fc-event-bg-color) !important;
+  border-radius: 3px !important;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.12);
+}
+.skin-gcal .fc-event-main {
+  color: var(--color-text-1);
+}
+.skin-gcal .fc-event-title {
+  font-weight: 600;
+}
+/* 月视图事件：GCal 圆点行（FC list-item 自带点，点色 = --fc-event-bg-color） */
+.skin-gcal .fc-daygrid-event {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 4px;
+  color: var(--color-text-1);
+}
+.skin-gcal .fc-daygrid-event:hover {
+  background: var(--color-surface);
+}
+.skin-gcal .fc-daygrid-dot-event .fc-daygrid-event-dot {
+  border-color: var(--fc-event-bg-color);
+}
+.skin-gcal .fc-timegrid-now-indicator-line {
+  border-color: var(--color-crit);
+  border-width: 2px;
+}

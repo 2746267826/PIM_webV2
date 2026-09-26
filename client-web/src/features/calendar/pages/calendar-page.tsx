@@ -201,9 +201,9 @@ export function CalendarPage() {
         </div>
       )}
 
-      {/* 日历主体 + 收件箱侧板 */}
+      {/* 日历主体 + 收件箱侧板（皮肤：谷歌竖条日视图 / 圆点行月视图） */}
       <div className="flex min-h-0 flex-1 gap-4">
-        <div className="skin-glass min-w-0 flex-1">
+        <div className="skin-gcal min-w-0 flex-1">
           <FullCalendar
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -218,7 +218,6 @@ export function CalendarPage() {
             droppable
             drop={onDrop}
             eventClick={onEventClick}
-            eventDisplay="block"
             height="auto"
             allDaySlot
             nowIndicator
@@ -232,24 +231,51 @@ export function CalendarPage() {
               const short =
                 arg.event.start && arg.event.end &&
                 arg.event.end.getTime() - arg.event.start.getTime() < 45 * 60_000
+              // 月视图：GCal 圆点行（彩点 + 时间 + 标题）
+              if (arg.view.type.startsWith('dayGrid')) {
+                return (
+                  <div className="flex min-w-0 items-center gap-1.5 px-0.5 py-0.5">
+                    {!cancelled && (
+                      <span
+                        className="size-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: arg.event.backgroundColor }}
+                        aria-hidden
+                      />
+                    )}
+                    {arg.timeText && (
+                      <span className="tnum shrink-0 text-[11px] text-text-3">{arg.timeText}</span>
+                    )}
+                    <span
+                      className={cn(
+                        'truncate text-[12px] leading-4 font-medium',
+                        cancelled ? 'text-text-4 line-through' : 'text-text-1',
+                      )}
+                    >
+                      {repeated && <span className="mr-0.5 text-text-3">↻</span>}
+                      {arg.event.title}
+                    </span>
+                  </div>
+                )
+              }
+              // 日视图：谷歌竖条（白底左宽条由皮肤 CSS 绘制，这里只排文字）
               return (
-                <div className="flex h-full min-w-0 flex-col justify-center overflow-hidden rounded-[inherit] px-1.5 py-0.5">
+                <div className="flex h-full min-w-0 flex-col justify-center overflow-hidden rounded-[inherit] py-0.5 pr-1.5 pl-1">
                   {cancelled ? (
-                    <span className="truncate text-[11px] leading-4 font-medium text-white line-through opacity-70">
+                    <span className="truncate text-[11px] leading-4 font-medium text-text-4 line-through">
                       {arg.event.title}
                     </span>
                   ) : (
                     <>
                       {short ? (
                         <span className="truncate text-[11px] leading-4 font-semibold">
-                          {repeated && <span className="mr-0.5 font-normal opacity-90">↻</span>}
+                          {repeated && <span className="mr-0.5 font-normal text-text-3">↻</span>}
                           {arg.event.title}
                         </span>
                       ) : (
                         <>
-                          <span className="tnum text-[10px] leading-3 text-white/80">{arg.timeText}</span>
+                          <span className="tnum text-[10px] leading-3 text-text-3">{arg.timeText}</span>
                           <span className="truncate text-[11px] leading-4 font-semibold">
-                            {repeated && <span className="mr-0.5 font-normal opacity-90">↻</span>}
+                            {repeated && <span className="mr-0.5 font-normal text-text-3">↻</span>}
                             {arg.event.title}
                           </span>
                         </>
