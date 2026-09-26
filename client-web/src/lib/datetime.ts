@@ -82,3 +82,14 @@ export function dayEndIso(d: Date): string {
   x.setHours(23, 59, 59, 999)
   return x.toISOString()
 }
+
+/** 秒数 → 中文时长（"2 小时 5 分"/"48 分钟"） */
+export function formatDuration(seconds: number | null | undefined): string {
+  if (seconds == null || seconds <= 0) return '0 分钟'
+  const total = Math.round(seconds / 60)
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  if (h && m) return `${h} 小时 ${m} 分`
+  if (h) return `${h} 小时`
+  return `${m} 分钟`
+}

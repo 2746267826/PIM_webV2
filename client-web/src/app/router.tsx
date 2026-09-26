@@ -18,6 +18,13 @@ import { HabitsPage } from '@/features/calendar/pages/habits-page'
 import { QuickNotesPage } from '@/features/quick-notes/pages/quick-notes-page'
 import { DataCenterPage } from '@/features/calendar/pages/data-center-page'
 import { AuditTimelinePage } from '@/features/operations/pages/audit-timeline-page'
+import { PcTrackerPage } from '@/features/pc/pages/pc-tracker-page'
+import { BrowserPage } from '@/features/pc/pages/browser-page'
+import { MobileRecordsPage } from '@/features/mobile/pages/mobile-records-page'
+import { LocationHistoryPage } from '@/features/mobile/pages/location-history-page'
+import { DevicesPage } from '@/features/mobile/pages/devices-page'
+import { DeviceDetailPage } from '@/features/mobile/pages/device-detail-page'
+import { StatusPage } from '@/features/operations/pages/status-page'
 
 /** 路由表（对应规格 01 §4 全量路由；P0 先通骨架与设置域，其余为占位页） */
 export const router = createBrowserRouter([
@@ -56,10 +63,10 @@ export const router = createBrowserRouter([
           { path: 'confirmations', element: <ConfirmationsPage /> },
 
           // ── 洞察 ──
-          { path: 'pc-tracker', element: <UnderConstruction title="电脑记录" subtitle="PC 活动分析仪表盘（P3 阶段实现）" /> },
-          { path: 'pc-tracker/browser', element: <UnderConstruction title="浏览器使用" subtitle="域名使用分析（P3 阶段实现）" /> },
-          { path: 'mobile-records', element: <UnderConstruction title="手机记录" subtitle="手机使用分析与设备存活（P3 阶段实现）" /> },
-          { path: 'location-history', element: <UnderConstruction title="历史位置" subtitle="GPS 轨迹仪表盘（P3 阶段实现）" /> },
+          { path: 'pc-tracker', element: <PcTrackerPage /> },
+          { path: 'pc-tracker/browser', element: <BrowserPage /> },
+          { path: 'mobile-records', element: <MobileRecordsPage /> },
+          { path: 'location-history', element: <LocationHistoryPage /> },
 
           // ── 收集 ──
           { path: 'quick-notes', element: <QuickNotesPage /> },
@@ -72,7 +79,7 @@ export const router = createBrowserRouter([
           { path: 'habits', element: <HabitsPage /> },
 
           // ── 系统 ──
-          { path: 'status', element: <UnderConstruction title="状态" subtitle="系统/组件状态页（P3 阶段实现）" /> },
+          { path: 'status', element: <StatusPage /> },
           { path: 'settings', element: <SettingsHubPage /> },
           { path: 'settings/server', element: <ServerSettingsPage /> },
           { path: 'settings/microsoft', element: <UnderConstruction title="Microsoft 账户" subtitle="Outlook 日历 + OneDrive 文件连接（P4 阶段实现）" /> },
@@ -91,8 +98,8 @@ export const router = createBrowserRouter([
           { path: 'audit/:objectType/:objectId', element: <AuditTimelinePage /> },
           { path: 'endpoint-shell', element: <UnderConstruction title="端点外壳" subtitle="设备端点心跳/采集质量调试页（P4 阶段实现）" /> },
           { path: 'exhibition', element: <UnderConstruction title="展览馆" subtitle="图表组件陈列馆（P2 阶段实现）" /> },
-          { path: 'devices', element: <UnderConstruction title="设备管理" subtitle="移动设备管理（P3 阶段实现）" /> },
-          { path: 'devices/:deviceId', element: <UnderConstruction title="设备详情" subtitle="单设备详情（P3 阶段实现）" /> },
+          { path: 'devices', element: <DevicesPage /> },
+          { path: 'devices/:deviceId', element: <DeviceDetailPage /> },
 
           // ── 旧别名重定向（规格 01 §4） ──
           { path: 'sync', element: <Navigate to="/settings/microsoft?tab=outlook" replace /> },

@@ -53,3 +53,65 @@ export const auditApi = {
     )
   },
 }
+
+/* ── 状态页（P3） ─────────────────────────────────────────── */
+
+export interface SystemStatusDetail {
+  summary: { status: number | string; label: string; message: string; checkedAt: string }
+  components: { key: string; name: string; kind: number; status: number | string; message: string; checkedAt: string; details: Record<string, string> }[]
+  nextSteps: string[]
+}
+
+export interface PcQualityResponse {
+  overallStatus: number | string
+  label: string
+  message: string
+  checkedAt: string
+  components: { key: string; name: string; status: number | string; message: string; details: Record<string, string> }[]
+  issues: { code: string; severity: number | string; componentKey: string; message: string; nextStep: string | null }[]
+  nextSteps: string[]
+}
+
+export interface TrackerHealth {
+  deviceId: string
+  status: string
+  uptimeSeconds: number
+  hookActive: boolean
+  browserConnected: boolean
+  browserHeartbeatAgeSeconds: number | null
+  siteConnected: boolean
+  siteEventsUploaded: number
+  reportedAt: string
+}
+
+export interface DaemonHeartbeat {
+  deviceId: string
+  daemonKind: string
+  version: string
+  lastSuccessfulUploadAt: string | null
+  uploadQueueCount: number | null
+  activityWatchState: string
+  keyStatsState: string
+  collectionPaused: boolean
+  receivedAt: string
+  plannedOfflineAt: string | null
+}
+
+export interface MobileQualityResponse {
+  overallStatus: number | string
+  label: string
+  message: string
+  checkedAt: string
+  components: { key: string; name: string; status: number | string; message: string; details: Record<string, string> }[]
+  issues: { code: string; severity: number | string; componentKey: string; message: string; nextStep: string | null }[]
+  nextSteps: string[]
+}
+
+export const statusApi = {
+  detail: () => apiGet<SystemStatusDetail>('/api/v1/status/'),
+  pcQuality: () => apiGet<PcQualityResponse>('/api/v1/pc/quality'),
+  trackerHealth: () => apiGet<TrackerHealth>('/api/v1/pc/tracker/health/latest'),
+  daemonHeartbeats: () => apiGet<DaemonHeartbeat[]>('/api/v1/daemon/heartbeats'),
+  mobileQuality: (deviceId?: string) =>
+    apiGet<MobileQualityResponse>(`/api/v1/mobile/quality${deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : ''}`),
+}

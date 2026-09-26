@@ -9,6 +9,12 @@ const ok = (res, data) => json(res, 200, { code: 0, message: 'ok', data, timesta
 const paged = (res, items) =>
   ok(res, { items, totalCount: items.length, page: 1, pageSize: 100, totalPages: 1 })
 
+const daysAgo = (n) => new Date(Date.now() - n * 86_400_000).toISOString()
+const iso = (h, m = 0) => {
+  const d = new Date()
+  d.setHours(h, m, 0, 0)
+  return d.toISOString()
+}
 const USER = { id: 'u1', username: 'demo', displayName: '演示用户', role: 'admin' }
 const TOKENS = () => ({
   accessToken: 'mock-access-token',
@@ -357,6 +363,274 @@ createServer((req, res) => {
     readBody((b) => ok(res, b))
     return
   }
+
+if (path === '/api/v1/mobile/analytics/charts') {
+  const pts = (labels, vals) => labels.map((l, i) => ({ key: String(i), label: l, value: vals[i] }))
+  ok(res, [
+    { key: 'category-share', title: '分类占比', chartType: 'pie', unit: 'minutes', points: pts(['聊天', '视频', '其他'], [64, 38, 22]) },
+    { key: 'top-apps', title: 'Top App', chartType: 'bar', unit: 'minutes', points: pts(['微信', '抖音', 'B站', '知乎'], [48, 32, 25, 19]) },
+    { key: 'daily-total', title: '每日趋势', chartType: 'line', unit: 'minutes', points: pts(Array.from({ length: 7 }, (_, i) => daysAgo(6 - i).slice(0, 10)), Array.from({ length: 7 }, () => Math.round(120 + Math.random() * 160))) },
+    { key: 'hour-distribution', title: '小时分布', chartType: 'bar', unit: 'minutes', points: pts(Array.from({ length: 24 }, (_, i) => String(i) + '时'), Array.from({ length: 24 }, () => Math.round(Math.random() * 20))) },
+  ])
+  return
+}
+if (path === '/api/v1/mobile/analytics/timeline-blocks') {
+  const items = []
+  for (let i = 0; i < 8; i++) {
+    const h = 21 - i * 2
+    if (h < 7) break
+    items.push({ id: 'blk-' + i, startUtc: iso(h), endUtc: iso(h + 1), localStart: String(h).padStart(2, '0') + ':00', localEnd: String(h + 1).padStart(2, '0') + ':00', lifeCategory: ['聊天', '视频'][i % 2], foregroundSeconds: 2400 + Math.round(Math.random() * 900), sessionCount: 3 + i, appCount: i % 3 === 0 ? 1 : 2, topApps: [{ packageName: 'com.tencent.mm', displayName: '微信', foregroundSeconds: 1800 }] })
+  }
+  ok(res, { items, hasMore: false, totalCount: items.length, nextCursor: null })
+  return
+}
+if (/timeline-blocks\/[^/]+\/sessions$/.test(path)) {
+  ok(res, [
+    { id: 's1', packageName: 'com.tencent.mm', displayName: '微信', startUtc: iso(21), endUtc: iso(21, 40), durationSeconds: 2400, lifeCategory: '聊天' },
+    { id: 's2', packageName: 'com.zhihu.android', displayName: '知乎', startUtc: iso(21, 45), endUtc: iso(21, 55), durationSeconds: 600, lifeCategory: '其他' },
+  ])
+  return
+}
+if (path === '/api/v1/mobile/devices/manage') {
+  ok(res, [
+    { deviceId: 'pixel-7', displayName: 'Pixel 7', brand: 'Google', model: 'Pixel 7', osVersion: 'Android 15', appVersion: '1.4.0', registeredAtUtc: daysAgo(30), lastSeenAtUtc: new Date().toISOString(), isOnline: true, sessionCount: 210, eventCount: 4321, locationCount: 1890, storageEstimateKb: 3210, syncStatus: 'normal', dataQuality: 'normal', storagePressure: 'normal' },
+    { deviceId: 'mi-pad', displayName: '小米平板', brand: 'Xiaomi', model: 'Pad 6', osVersion: 'Android 14', appVersion: '1.3.2', registeredAtUtc: daysAgo(60), lastSeenAtUtc: daysAgo(0.2), isOnline: false, sessionCount: 88, eventCount: 1200, locationCount: 340, storageEstimateKb: 980, syncStatus: 'delayed', dataQuality: 'normal', storagePressure: 'pending' },
+  ])
+  return
+}
+if (/devices\/[^/]+\/delete-preview$/.test(path)) {
+  ok(res, { deviceId: 'pixel-7', displayName: 'Pixel 7', sessionCount: 210, eventCount: 4321, locationCount: 1890, summaryCount: 84 })
+  return
+}
+if (/devices\/[^/]+\/detail$/.test(path)) {
+  ok(res, {
+    device: { deviceId: 'pixel-7', displayName: 'Pixel 7', brand: 'Google', model: 'Pixel 7', osVersion: 'Android 15', appVersion: '1.4.0', registeredAtUtc: daysAgo(30), lastSeenAtUtc: new Date().toISOString() },
+    stats: { sessionCount: 210, eventCount: 4321, locationCount: 1890, storageEstimateKb: 3210 },
+    syncHistory: Array.from({ length: 5 }, (_, i) => ({ batchId: 'batch-' + i, createdAt: daysAgo(i), acceptedCount: 120 - i * 10, status: i === 2 ? 'completed-with-errors' : 'completed' })),
+    healthTimeline: Array.from({ length: 7 }, (_, i) => daysAgo(6 - i).slice(0, 10) + (i >= 5 ? ':online' : ':offline')),
+  })
+  return
+}
+if (/devices\/[^/]+\/rename$/.test(path) || /devices\/merge/.test(path) || (req.method === 'DELETE' && /devices\/[^/]+$/.test(path))) {
+  readBody(() => ok(res, null))
+  return
+}
+if (path === '/api/v1/mobile/liveness/overview') {
+  const mk = (id, name, kind, label, has) => ({ deviceId: id, displayName: name, deviceKind: kind, deviceKindLabel: label, hasData: has, conclusion: has ? '存活连续：区间内无大于等于30分钟静默。' : '无数据/未上报：该区间内没有任何存活证据。', coverageByHour: has ? 0.92 : null, longestSilenceMinutes: has ? 18 : 0, silences: [], causes: has ? [{ cause: 'reboot', label: '设备重启', count: 1, inference: null }] : [], lastEventAtUtc: has ? new Date().toISOString() : null })
+  ok(res, { rangeStartUtc: daysAgo(7), rangeEndUtc: new Date().toISOString(), expectedHeartbeatIntervalMinutes: 15, phones: [mk('pixel-7', 'Pixel 7', 'phone', '手机', true)], tablets: [mk('mi-pad', '小米平板', 'tablet', '平板', false)], unclassified: [] })
+  return
+}
+if (path === '/api/v1/mobile/location/analytics/overview') {
+  ok(res, { range: { rangeStartUtc: '', rangeEndUtc: '', localStartDate: '', localEndDate: '' }, pointCount: 1890, usablePointCount: 1720, rejectedPointCount: 170, distanceMeters: 48200, stayCount: 12, longestStaySeconds: 14400, averageAccuracyMeters: 12.4 })
+  return
+}
+if (path === '/api/v1/mobile/location/analytics/tracks') {
+  const mkPath = (lat0, lng0, n) => Array.from({ length: n }, (_, i) => ({ id: 'p' + i, recordedAtUtc: new Date(Date.now() - (n - i) * 60000).toISOString(), latitude: lat0 + (Math.random() - 0.5) * 0.01, longitude: lng0 + (Math.random() - 0.5) * 0.01, horizontalAccuracyMeters: 10 }))
+  ok(res, [{ id: 'trk-1', deviceId: 'pixel-7', startUtc: iso(9), endUtc: iso(12), distanceMeters: 12400, durationSeconds: 10800, pointCount: 120, segmentCount: 2, segments: [
+    { id: 'seg-stay', kind: 'stay', startUtc: iso(9), endUtc: iso(11), localStart: '09:00', localEnd: '11:00', durationSeconds: 7200, distanceMeters: 0, pointCount: 40, path: [{ id: 's0', recordedAtUtc: iso(10), latitude: 31.2304, longitude: 121.4737, horizontalAccuracyMeters: 8 }] },
+    { id: 'seg-move', kind: 'move', startUtc: iso(11), endUtc: iso(12), localStart: '11:00', localEnd: '12:00', durationSeconds: 3600, distanceMeters: 12400, pointCount: 80, path: mkPath(31.2304, 121.4737, 40) },
+  ] }])
+  return
+}
+if (path === '/api/v1/mobile/location/analytics/frequent-places') {
+  ok(res, {
+    home: { centerLatitude: 31.2304, centerLongitude: 121.4737, radiusMeters: 120, pointCount: 890, visitDayCount: 6, isHome: true },
+    places: [
+      { centerLatitude: 31.2304, centerLongitude: 121.4737, radiusMeters: 120, pointCount: 890, visitDayCount: 6, isHome: true },
+      { centerLatitude: 31.2260, centerLongitude: 121.4700, radiusMeters: 80, pointCount: 210, visitDayCount: 4, isHome: false },
+    ],
+  })
+  return
+}
+if (path === '/api/v1/mobile/location/analytics/movement-stats') {
+  ok(res, { homeCenter: { latitude: 31.2304, longitude: 121.4737 }, outingCount: 5, outingSeconds: 32400, distanceMeters: 48200, maxSpeedMetersPerSecond: 8.4 })
+  return
+}
+if (/segments\/[^/]+\/points$/.test(path)) {
+  const items = Array.from({ length: 50 }, (_, i) => ({ id: 'pt-' + i, recordedAtUtc: new Date(Date.now() - i * 120000).toISOString(), latitude: 31.23 + (Math.random() - 0.5) * 0.01, longitude: 121.47 + (Math.random() - 0.5) * 0.01, horizontalAccuracyMeters: 10 }))
+  ok(res, { items, nextCursor: null, hasMore: false })
+  return
+}
+if (path === '/api/v1/status/' || path === '/api/v1/status') {
+  ok(res, {
+    summary: { status: 1, label: '正常', message: '全部组件健康（mock）', checkedAt: new Date().toISOString() },
+    components: [
+      { key: 'api', name: 'API 服务', kind: 0, status: 1, message: '正常', checkedAt: new Date().toISOString(), details: {} },
+      { key: 'db', name: 'PostgreSQL', kind: 1, status: 1, message: '连接正常', checkedAt: new Date().toISOString(), details: {} },
+      { key: 'storage', name: '对象存储', kind: 2, status: 2, message: 'OneDrive 令牌即将过期', checkedAt: new Date().toISOString(), details: {} },
+      { key: 'jobs', name: '后台任务', kind: 7, status: 1, message: 'Hangfire 正常', checkedAt: new Date().toISOString(), details: {} },
+    ],
+    nextSteps: ['检查 OneDrive 授权状态（设置 → Microsoft 账户）'],
+  })
+  return
+}
+if (path === '/api/v1/pc/quality') {
+  ok(res, { overallStatus: 1, label: 'PC 采集正常', message: '键鼠与窗口采集均正常', checkedAt: new Date().toISOString(), components: [], issues: [], nextSteps: [] })
+  return
+}
+if (path === '/api/v1/pc/tracker/health/latest') {
+  ok(res, { deviceId: 'ws-01', status: 'running', uptimeSeconds: 86400, hookActive: true, browserConnected: true, browserHeartbeatAgeSeconds: 45, siteConnected: false, siteEventsUploaded: 0, reportedAt: new Date().toISOString() })
+  return
+}
+if (path === '/api/v1/daemon/heartbeats') {
+  ok(res, [
+    { deviceId: 'ws-01', daemonKind: 'windows', version: '1.4.0', lastSuccessfulUploadAt: new Date().toISOString(), uploadQueueCount: 0, activityWatchState: 'Available', keyStatsState: 'Available', collectionPaused: false, receivedAt: new Date().toISOString(), plannedOfflineAt: null },
+  ])
+  return
+}
+if (path === '/api/v1/mobile/quality') {
+  ok(res, { overallStatus: 1, label: 'Android 采集正常', message: '心跳与使用上报正常', checkedAt: new Date().toISOString(), components: [], issues: [], nextSteps: [] })
+  return
+}
+
+if (path === '/api/v1/pc/heatmap/grid') {
+  const dimension = url.searchParams.get('dimension') ?? 'day'
+  const grid = []
+  const rows = dimension === 'day' ? 7 : 12
+  for (let y = 0; y < rows; y++) {
+    const row = []
+    for (let x = 0; x < (dimension === 'hour' ? 24 : 7); x++) {
+      const v = Math.random() > 0.35 ? Math.round(Math.random() * 8000) : 0
+      row.push({ start: new Date().toISOString(), end: new Date().toISOString(), hour: dimension === 'hour' ? x : y, activeMinutes: 0, totalEvents: v, intensityScore: v })
+    }
+    grid.push(row)
+  }
+  ok(res, { grid, dimension, maxKeyCount: 8000 })
+  return
+}
+if (path === '/api/v1/pc/activity-analysis') {
+  const blocks = []
+  for (let h = 7; h <= 22; h++) {
+    blocks.push({
+      start: iso(h), end: iso(h + 1), intensityScore: Math.round(Math.random() * 100),
+      activeDurationSeconds: 3600, pendingClassificationCount: h === 10 || h === 15 ? 3 : 0,
+      contextSwitchCount: Math.round(Math.random() * 20),
+      categories: [{ categoryName: '开发', color: '#2563EB', durationSeconds: 2400 }, { categoryName: '学习', color: '#8B5CF6', durationSeconds: 1200 }],
+    })
+  }
+  ok(res, { date: url.searchParams.get('date') ?? '', blockMinutes: 60, blocks })
+  return
+}
+if (path === '/api/v1/pc/aggregation/app-usage') {
+  ok(res, { items: [
+    { appName: 'Code.exe', displayName: 'VS Code', totalMinutes: 214, percentage: 0.38 },
+    { appName: 'chrome.exe', displayName: 'Chrome', totalMinutes: 128, percentage: 0.22 },
+    { appName: 'WeChat.exe', displayName: '微信', totalMinutes: 62, percentage: 0.11 },
+    { appName: 'WINWORD.EXE', displayName: 'Word', totalMinutes: 45, percentage: 0.08 },
+  ], totalMinutes: 560 })
+  return
+}
+if (path === '/api/v1/pc/aggregation/category-distribution') {
+  ok(res, { items: [
+    { categoryName: '开发', color: '#2563EB', minutes: 260, percentage: 0.46 },
+    { categoryName: '学习', color: '#8B5CF6', minutes: 120, percentage: 0.21 },
+    { categoryName: '其他', color: '#64748B', minutes: 180, percentage: 0.33 },
+  ] })
+  return
+}
+if (path === '/api/v1/pc/productivity/dashboard') {
+  ok(res, {
+    todayScore: 78, productiveHours: 4.4, distractingHours: 1.2, neutralHours: 1.8, targetHours: 5, goalMet: false,
+    weeklyTrend: Array.from({ length: 7 }, (_, i) => ({ date: daysAgo(6 - i).slice(0, 10), productiveMinutes: 180 + Math.round(Math.random() * 180), neutralMinutes: 60 + Math.round(Math.random() * 60), distractingMinutes: Math.round(Math.random() * 80), totalMinutes: 360, productiveRatio: 0.6 })),
+  })
+  return
+}
+if (path === '/api/v1/pc/classification/queue') {
+  ok(res, { items: [
+    { targetType: 'app', target: 'Obsidian.exe', displayName: 'Obsidian', minutes: 84, sampleTitles: ['学习笔记 - 知识库'], currentCategory: null },
+    { targetType: 'domain', target: 'github.com', displayName: 'github.com', minutes: 56, sampleTitles: ['pim/client-web Pull requests'], currentCategory: null },
+  ] })
+  return
+}
+if (path === '/api/v1/pc/categories/dictionary') {
+  ok(res, [
+    { id: 'c1', name: '开发', color: '#2563EB', icon: null },
+    { id: 'c2', name: '学习', color: '#8B5CF6', icon: null },
+    { id: 'c3', name: '文档', color: '#F59E0B', icon: null },
+    { id: 'c4', name: '其他', color: '#64748B', icon: null },
+  ])
+  return
+}
+if (/classification\/label$/.test(path)) {
+  readBody(() => ok(res, { ok: true, categoryName: '已标注', created: '标注成功' }))
+  return
+}
+if (/app-knowledge\/suggestions\/[^/]+\/(preview|apply)$/.test(path)) {
+  readBody(() => ok(res, {
+    recommendation: { categoryName: '开发', categoryPath: '开发/工具' },
+    preview: { affectedRecordCount: 42, affectedDurationSeconds: 5400, currentCategoryCounts: { 其他: 42 }, newCategoryCounts: { 开发: 42 }, requiresConfirmation: false, summary: '42 条记录将重分类为「开发」' },
+  }))
+  return
+}
+if (/suggestions\/[^/]+\/reject$/.test(path)) { ok(res, '已拒绝'); return }
+if (path === '/api/v1/pc/classification/suggestions') {
+  ok(res, [
+    { id: 'sg-1', clusterKey: 'k1', sampleCount: 42, totalDurationSeconds: 5400, currentCategory: null, suggestedCategory: '开发', appDisplayName: 'Obsidian', status: 'pending' },
+  ])
+  return
+}
+if (path === '/api/v1/pc/browser-tt/summary') {
+  ok(res, {
+    from: daysAgo(6).slice(0, 10), to: new Date().toISOString().slice(0, 10),
+    totalFocusMs: 21 * 3600_000, totalVisits: 312, totalRunMs: 26 * 3600_000, totalMediaMs: 2 * 3600_000, siteCount: 23,
+    topHosts: [
+      { host: 'github.com', alias: null, focusMs: 6 * 3600_000, visitCount: 96 },
+      { host: 'docs.rs', alias: null, focusMs: 3.2 * 3600_000, visitCount: 54 },
+      { host: 'stackoverflow.com', alias: null, focusMs: 2.4 * 3600_000, visitCount: 41 },
+      { host: 'zhihu.com', alias: null, focusMs: 1.1 * 3600_000, visitCount: 38 },
+    ],
+  })
+  return
+}
+if (path === '/api/v1/pc/browser-tt/daily') {
+  ok(res, Array.from({ length: 7 }, (_, i) => ({ date: daysAgo(6 - i).slice(0, 10), host: 'all', focusMs: (2 + Math.random() * 3) * 3600_000, visitCount: 40 + Math.round(Math.random() * 30), runMs: 3 * 3600_000, mediaMs: 0 })))
+  return
+}
+if (path === '/api/v1/pc/browser-tt/timeline') {
+  const tl = []
+  const hosts = [['github.com', 9], ['docs.rs', 11], ['stackoverflow.com', 14], ['zhihu.com', 20]]
+  let ci = 0
+  for (const [host, h] of hosts) {
+    tl.push({ host, startMs: new Date(iso(h)).getTime(), durationMs: 45 * 60000 })
+    tl.push({ host, startMs: new Date(iso(h + 1, 20)).getTime(), durationMs: 20 * 60000 })
+    ci++
+  }
+  ok(res, tl)
+  return
+}
+if (/browser-tt\/import$/.test(path)) {
+  readBody(() => ok(res, { rows: 128, dates: 5, hosts: 12, skipped: 2, format: 'tt4b-markdown' }))
+  return
+}
+
+/* 手机域 */
+if (path === '/api/v1/mobile/analytics/overview') {
+  ok(res, {
+    range: { rangeStartUtc: daysAgo(7), rangeEndUtc: new Date().toISOString(), localStartDate: '', localEndDate: '' },
+    generatedAt: new Date().toISOString(),
+    totalForegroundSeconds: 3.1 * 3600, dailyAverageSeconds: 0.45 * 3600,
+    highestUseLocalDate: new Date().toISOString().slice(0, 10), peakLocalHour: 21,
+    appCount: 12, switchOrPickupCount: 84, completeness: 0.82,
+    quality: { usageEventsCoverage: 0.82, fallbackShare: 0.18, missingMetadataAppCount: 1, systemNoiseShare: 0.05, failedOrPartialSyncBatchCount: 0, lastSyncAt: at(8) },
+    goalProgress: null,
+    anomalies: [{ code: 'night-use', severity: 'Warning', title: '夜间使用偏高', evidence: '22 点后仍有 18 分钟使用', drilldownTarget: 'heatmap' }],
+    suggestions: [{ code: 'top-category-review', text: '「视频」分类近 7 天占 34%，建议复查是否需要限制', drilldownTarget: '' }],
+  })
+  return
+}
+if (path === '/api/v1/mobile/analytics/heatmap') {
+  const buckets = []
+  for (let d = 6; d >= 0; d--) {
+    const date = daysAgo(d).slice(0, 10)
+    for (let h = 0; h < 24; h++) {
+      if ((h < 7 || h > 23) && Math.random() > 0.1) continue
+      if (Math.random() > 0.55) continue
+      buckets.push({ bucketStartUtc: '', bucketEndUtc: '', localDate: date, localHour: h, lifeCategory: ['聊天', '视频', '其他'][Math.floor(Math.random() * 3)], foregroundSeconds: Math.round(Math.random() * 1800) })
+    }
+  }
+  ok(res, buckets)
+  return
+}
 
   json(res, 404, { code: 404, message: `接口不存在: ${path}`, data: null, timestamp: new Date().toISOString() })
 }).listen(5858, () => console.log('mock api on :5858'))
