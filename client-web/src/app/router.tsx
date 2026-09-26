@@ -10,6 +10,7 @@ import { CalendarPage } from '@/features/calendar/pages/calendar-page'
 import { TasksPage } from '@/features/calendar/pages/tasks-page'
 import { TodayPage } from '@/features/today/pages/today-page'
 import { ConfirmationsPage } from '@/features/operations/pages/confirmations-page'
+import { CalendarStylesPage } from '@/features/calendar/styles/calendar-styles-page'
 
 /** 路由表（对应规格 01 §4 全量路由；P0 先通骨架与设置域，其余为占位页） */
 export const router = createBrowserRouter([
@@ -42,6 +43,7 @@ export const router = createBrowserRouter([
           // ── 工作 ──
           { path: 'today', element: <TodayPage /> },
           { path: 'calendar', element: <CalendarPage /> },
+          { path: 'calendar-styles', element: <CalendarStylesPage /> },
           { path: 'workbench', element: <UnderConstruction title="工作台" subtitle="运营驾驶舱与 AI 排程建议（P2 阶段实现）" /> },
           { path: 'tasks', element: <TasksPage /> },
           { path: 'confirmations', element: <ConfirmationsPage /> },

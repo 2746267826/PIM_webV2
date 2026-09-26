@@ -7,8 +7,10 @@ import { ErrorBoundary } from '@/components/ui'
 import { getApiBase } from '@/lib/apiBase'
 import { installScrollTracking } from '@/lib/polling'
 import { Drawer, DrawerContent } from '@/components/ui'
+import { cn } from '@/lib/utils'
 import { GlobalFab } from './global-fab'
 import { SidebarContent } from './sidebar'
+import { useSidebarCollapsed } from './use-sidebar-collapsed'
 import { CalendarVisibilityProvider } from '@/features/calendar/calendar-visibility'
 
 /** 页脚：本地版本 / API 版本 / "有可用更新"标记 / 当前服务器 */
@@ -36,6 +38,7 @@ function AppFooter() {
 export function AppShell() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const { pathname } = useLocation()
+  const { collapsed, toggle } = useSidebarCollapsed()
 
   // 全局滚动活动跟踪（延迟轮询依赖）
   useEffect(() => installScrollTracking(), [])
@@ -70,9 +73,14 @@ export function AppShell() {
           <SidebarContent compact />
         </aside>
 
-        {/* 桌面侧边栏 */}
-        <aside className="sticky top-0 hidden h-dvh w-[232px] shrink-0 border-r border-border bg-surface lg:block">
-          <SidebarContent />
+        {/* 桌面侧边栏（可折叠为图标栏；折叠状态持久化） */}
+        <aside
+          className={cn(
+            'sticky top-0 hidden h-dvh shrink-0 border-r border-border bg-surface transition-[width] duration-200 lg:block',
+            collapsed ? 'w-16' : 'w-[232px]',
+          )}
+        >
+          <SidebarContent compact={collapsed} onToggle={toggle} />
         </aside>
 
         {/* 主内容区：每页独立错误边界 */}

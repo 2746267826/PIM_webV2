@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
-import { LogOut, Server } from 'lucide-react'
+import { LogOut, PanelLeftClose, PanelLeftOpen, Server } from 'lucide-react'
 import { useAuth } from '@/features/auth/auth-context'
 import { useStatusSummary } from '@/api/version'
 import { CalendarBooksManager } from '@/features/calendar/components/calendar-books-manager'
@@ -115,9 +115,12 @@ function ApiBaseHint() {
 function SidebarContent({
   compact = false,
   onNavigate,
+  onToggle,
 }: {
   compact?: boolean
   onNavigate?: () => void
+  /** 桌面折叠切换；移动抽屉不传则不显示按钮 */
+  onToggle?: () => void
 }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -128,8 +131,26 @@ function SidebarContent({
     <div className="flex h-full flex-col">
       {/* 头部 */}
       <div className={cn('flex h-16 shrink-0 items-center gap-2', compact ? 'justify-center px-0' : 'px-4')}>
-        <span className="size-2.5 rounded-full bg-primary" aria-hidden />
-        {!compact && <span className="text-base font-semibold tracking-wide text-text-1">PIM</span>}
+        <span className="size-2.5 shrink-0 rounded-full bg-primary" aria-hidden />
+        {!compact && <span className="flex-1 text-base font-semibold tracking-wide text-text-1">PIM</span>}
+        {onToggle && (
+          <button
+            type="button"
+            title={compact ? '展开导航' : '折叠导航'}
+            aria-label={compact ? '展开导航' : '折叠导航'}
+            onClick={onToggle}
+            className={cn(
+              'rounded-ctl p-1.5 text-text-3 transition-colors hover:bg-surface-2 hover:text-text-1 outline-none',
+              !compact && 'order-first',
+            )}
+          >
+            {compact ? (
+              <PanelLeftOpen className="size-4" aria-hidden />
+            ) : (
+              <PanelLeftClose className="size-4" aria-hidden />
+            )}
+          </button>
+        )}
       </div>
 
       {/* 导航 */}

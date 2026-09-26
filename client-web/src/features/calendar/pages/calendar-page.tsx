@@ -6,7 +6,8 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import zhCnLocale from '@fullcalendar/core/locales/zh-cn'
 import type { DatesSetArg, EventClickArg } from '@fullcalendar/core'
-import { CalendarPlus, ChevronLeft, ChevronRight, Inbox } from 'lucide-react'
+import { CalendarPlus, ChevronLeft, ChevronRight, Inbox, Paintbrush } from 'lucide-react'
+import { Link } from 'react-router'
 import { useCalendarVisibility } from '../calendar-visibility'
 import { useCalendars, useEvents, useLayers, usePlanTask, useTaskBooks } from '../queries'
 import { EventEditorDialog } from '../components/event-editor-dialog'
@@ -111,6 +112,8 @@ export function CalendarPage() {
       np.set('view', next)
       return np
     })
+    // initialView 仅初始化生效，切换必须走 api.changeView
+    calendarRef.current?.getApi().changeView(next === 'month' ? 'dayGridMonth' : 'timeGridDay')
   }
 
   function onDatesSet(arg: DatesSetArg) {
@@ -147,6 +150,13 @@ export function CalendarPage() {
         subtitle={range.title}
         actions={
           <>
+            <Link
+              to="/calendar-styles"
+              title="日历样式对比：选择一套视觉方案"
+              className="inline-flex h-8 items-center gap-1.5 rounded-ctl px-3 text-[13px] font-medium text-text-2 transition-colors hover:bg-surface hover:text-text-1 outline-none"
+            >
+              <Paintbrush className="size-4" aria-hidden /> 皮肤
+            </Link>
             <Button variant="secondary" size="sm" className="lg:hidden" onClick={() => setInboxOpen(true)}>
               <Inbox className="size-4" aria-hidden /> 收件箱
             </Button>

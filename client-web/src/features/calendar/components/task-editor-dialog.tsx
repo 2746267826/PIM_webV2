@@ -7,42 +7,54 @@ import { ApiError } from '@/api/client'
 import { useChecklistMutations, useDeleteTask, useSaveTask } from '../queries'
 import type { TaskBook, TaskResponse } from '../types'
 import { fromLocalInputValue, toLocalInputValue } from '@/lib/datetime'
-import { Button, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, Input, Label, Select, Textarea } from '@/components/ui'
+import { InlineAlert, Button, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, Input, Label, Select, Textarea } from '@/components/ui'
 
-const schema = z.object({
-  title: z.string().min(1, '请输入标题').max(255, '最多 255 字符'),
-  taskBookId: z.string(),
-  priority: z.string(),
-  estimated: z.string(),
-  due: z.string(),
-  description: z.string(),
-})
+/** 与后端 CreateTaskRequest/UpdateTaskRequest 对齐的全部可写字段（05/calendar.md §任务） */
+const schema = z
+  .object({
+    title: z.string().min(1, '请输入标题').max(255, '最多 255 字符'),
+    taskBookId: z.string(),
+    priority: z.string(),
+    estimatedDuration: z.string(),
+    minimumSegment: z.string(),
+    due: z.string(),
+    dtStart: z.string(),
+    plannedEnd: z.string(),
+    status: z.enum(['NEEDS-ACTION', 'COMPLETED', 'CANCELLED']),
+    percentComplete: z.string(),
+    description: z.string(),
+  })
+  .refine((v) => !v.dtStart || !v.plannedEnd || v.plannedEnd > v.dtStart, {
+    message: '计划结束须晚于计划开始',
+    path: ['plannedEnd'],
+  })
 
 const PRIORITY_OPTIONS = [
-  { value: '1', label: '低' },
-  { value: '5', label: '中' },
-  { value: '9', label: '高' },
+  { value: '1', label: '低（1）' },
+  { value: '5', label: '中（5）' },
+  { value: '9', label: '高（9）' },
 ]
 
-const DURATION_OPTIONS = [
-  { value: '', label: '不限' },
-  { value: '00:15:00', label: '15 分钟' },
-  { value: '00:30:00', label: '30 分钟' },
-  { value: '01:00:00', label: '1 小时' },
-  { value: '01:30:00', label: '1.5 小时' },
-  { value: '02:00:00', label: '2 小时' },
-  { value: '04:00:00', label: '4 小时' },
+const STATUS_OPTIONS = [
+  { value: 'NEEDS-ACTION', label: '待办' },
+  { value: 'COMPLETED', label: '已完成' },
+  { value: 'CANCELLED', label: '已取消' },
 ]
+
+/** 时长输入提示（hh:mm:ss；后端亦接受 ISO8601 PT1H30M） */
+const DURATION_HINT = 'hh:mm:ss，如 01:30:00'
 
 export interface TaskEditorProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   taskBooks: TaskBook[]
   task?: TaskResponse | null
+  /** 新建时的预填计划开始（拖放场景） */
+  initialPlannedStart?: Date | null
 }
 
-/** 任务编辑弹窗（属性 + 清单；时间段在独立面板 TaskSegmentsDialog） */
-export function TaskEditorDialog({ open, onOpenChange, taskBooks, task }: TaskEditorProps) {
+/** 任务编辑弹窗：属性 + 清单（时间段在独立面板 TaskSegmentsDialog） */
+export function TaskEditorDialog({ open, onOpenChange, taskBooks, task, initialPlannedStart }: TaskEditorProps) {
   const isEdit = task != null
   const save = useSaveTask()
   const remove = useDeleteTask()
@@ -52,7 +64,10 @@ export function TaskEditorDialog({ open, onOpenChange, taskBooks, task }: TaskEd
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
-    defaultValues: { title: '', taskBookId: '', priority: '5', estimated: '', due: '', description: '' },
+    defaultValues: {
+      title: '', taskBookId: '', priority: '5', estimatedDuration: '', minimumSegment: '',
+      due: '', dtStart: '', plannedEnd: '', status: 'NEEDS-ACTION', percentComplete: '0', description: '',
+    },
   })
 
   useEffect(() => {
@@ -64,24 +79,40 @@ export function TaskEditorDialog({ open, onOpenChange, taskBooks, task }: TaskEd
         title: task.title,
         taskBookId: task.taskBookId ?? '',
         priority: String(task.priority),
-        estimated: task.estimatedDuration ?? '',
+        estimatedDuration: task.estimatedDuration ?? '',
+        minimumSegment: task.minimumSegment ?? '',
         due: toLocalInputValue(task.due),
+        dtStart: toLocalInputValue(task.dtStart),
+        plannedEnd: toLocalInputValue(task.plannedEnd),
+        status: (task.status === 'COMPLETED' || task.status === 'CANCELLED' ? task.status : 'NEEDS-ACTION') as z.infer<typeof schema>['status'],
+        percentComplete: String(task.percentComplete ?? 0),
         description: task.description ?? '',
       })
     } else {
-      form.reset({ title: '', taskBookId: '', priority: '5', estimated: '', due: '', description: '' })
+      form.reset({
+        title: '', taskBookId: '', priority: '5', estimatedDuration: '', minimumSegment: '',
+        due: '', dtStart: initialPlannedStart ? toLocalInputValue(initialPlannedStart.toISOString()) : '',
+        plannedEnd: '', status: 'NEEDS-ACTION', percentComplete: '0', description: '',
+      })
     }
-  }, [open, task, form])
+  }, [open, task, initialPlannedStart, form])
 
   async function submit(values: z.infer<typeof schema>) {
     setError(null)
     const due = fromLocalInputValue(values.due)
+    const dtStart = fromLocalInputValue(values.dtStart)
+    const plannedEnd = fromLocalInputValue(values.plannedEnd)
     const body: Record<string, unknown> = {
       title: values.title,
       description: values.description || null,
       priority: Number(values.priority),
+      estimatedDuration: values.estimatedDuration || null,
+      minimumSegment: values.minimumSegment || null,
       due,
-      estimatedDuration: values.estimated || null,
+      dtStart,
+      plannedEnd,
+      status: values.status,
+      percentComplete: Number(values.percentComplete) || 0,
       taskBookId: values.taskBookId || null,
     }
     try {
@@ -92,55 +123,97 @@ export function TaskEditorDialog({ open, onOpenChange, taskBooks, task }: TaskEd
     }
   }
 
+  const values = form.watch()
   const checklistItems = task?.checklistItems ?? []
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[520px]">
+      <DialogContent className="max-w-[560px]">
         <DialogHeader title={isEdit ? '编辑任务' : '新建任务'} />
         <DialogBody className="space-y-4">
-          {error && <InlineError message={error} />}
+          {error && <InlineAlert tone="crit">{error}</InlineAlert>}
           <div>
-            <Label htmlFor="task-title">标题</Label>
+            <Label htmlFor="task-title">标题 *</Label>
             <Input id="task-title" {...form.register('title')} autoFocus />
             {form.formState.errors.title && (
               <p className="mt-1 text-xs text-crit">{form.formState.errors.title.message}</p>
             )}
           </div>
+
           <div className="grid grid-cols-3 gap-3">
             <div>
               <Label htmlFor="task-book">任务本</Label>
               <Select
                 id="task-book"
-                value={form.watch('taskBookId') || undefined}
+                value={values.taskBookId || undefined}
                 onValueChange={(v) => form.setValue('taskBookId', v)}
                 options={taskBooks.map((b) => ({ value: b.id, label: b.name }))}
-                placeholder="无"
+                placeholder="无（收集箱）"
               />
             </div>
             <div>
               <Label htmlFor="task-priority">优先级</Label>
               <Select
                 id="task-priority"
-                value={form.watch('priority')}
+                value={values.priority}
                 onValueChange={(v) => form.setValue('priority', v)}
                 options={PRIORITY_OPTIONS}
               />
             </div>
             <div>
-              <Label htmlFor="task-estimated">预计时长</Label>
+              <Label htmlFor="task-status">状态</Label>
               <Select
-                id="task-estimated"
-                value={form.watch('estimated')}
-                onValueChange={(v) => form.setValue('estimated', v)}
-                options={DURATION_OPTIONS}
+                id="task-status"
+                value={values.status}
+                onValueChange={(v) => form.setValue('status', v as z.infer<typeof schema>['status'])}
+                options={STATUS_OPTIONS}
               />
             </div>
           </div>
-          <div>
-            <Label htmlFor="task-due">截止时间</Label>
-            <Input id="task-due" type="datetime-local" {...form.register('due')} />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="task-estimated">预计时长</Label>
+              <Input id="task-estimated" className="mono" placeholder={DURATION_HINT} {...form.register('estimatedDuration')} />
+            </div>
+            <div>
+              <Label htmlFor="task-minimum">最小可排段</Label>
+              <Input id="task-minimum" className="mono" placeholder={DURATION_HINT} {...form.register('minimumSegment')} />
+            </div>
           </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <Label htmlFor="task-due">截止时间</Label>
+              <Input id="task-due" type="datetime-local" {...form.register('due')} />
+            </div>
+            <div>
+              <Label htmlFor="task-dtstart">计划开始</Label>
+              <Input id="task-dtstart" type="datetime-local" {...form.register('dtStart')} />
+            </div>
+            <div>
+              <Label htmlFor="task-plannedend">计划结束</Label>
+              <Input id="task-plannedend" type="datetime-local" {...form.register('plannedEnd')} />
+            </div>
+          </div>
+          {form.formState.errors.plannedEnd && (
+            <p className="text-xs text-crit">{form.formState.errors.plannedEnd.message}</p>
+          )}
+
+          <div>
+            <Label htmlFor="task-percent">完成百分比（{values.percentComplete}%）</Label>
+            <input
+              id="task-percent"
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={values.percentComplete}
+              onChange={(e) => form.setValue('percentComplete', e.target.value)}
+              className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-surface-2 accent-primary outline-none"
+            />
+          </div>
+
           <div>
             <Label htmlFor="task-desc">描述</Label>
             <Textarea id="task-desc" rows={3} {...form.register('description')} />
@@ -148,7 +221,10 @@ export function TaskEditorDialog({ open, onOpenChange, taskBooks, task }: TaskEd
 
           {isEdit && (
             <>
-              <Divider label="检查清单" />
+              <div className="flex items-center gap-3 pt-1">
+                <span className="text-xs font-medium text-text-3">检查清单</span>
+                <span className="h-px flex-1 bg-divider" />
+              </div>
               <div className="space-y-1.5">
                 {checklistItems.map((item) => (
                   <div key={item.id} className="group flex items-center gap-2">
@@ -225,18 +301,5 @@ export function TaskEditorDialog({ open, onOpenChange, taskBooks, task }: TaskEd
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function InlineError({ message }: { message: string }) {
-  return <div className="rounded-ctl border border-crit-border bg-crit-soft px-3 py-2 text-[13px] text-crit">{message}</div>
-}
-
-function Divider({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 pt-1">
-      <span className="text-xs font-medium text-text-3">{label}</span>
-      <span className="h-px flex-1 bg-divider" />
-    </div>
   )
 }

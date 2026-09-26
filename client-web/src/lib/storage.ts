@@ -40,6 +40,7 @@ export const STORAGE_KEYS = {
   labelingCustomCategories: 'pim.labelingCategories',
   quickNoteDialogPosition: 'pim.quickNoteDialog',
   exhibition: 'pim.exhibition',
+  sidebarCollapsed: 'pim.sidebarCollapsed',
 } as const
 
 export function getString(key: string): string | null {

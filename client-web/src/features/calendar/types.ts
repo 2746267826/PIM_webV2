@@ -28,6 +28,8 @@ export interface TaskBook {
 export interface EventPerson {
   name?: string
   email?: string
+  /** 参会人类型（规格 attendees：type 默认 required） */
+  type?: string
 }
 
 export interface EventResponse {
