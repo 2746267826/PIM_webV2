@@ -7,7 +7,16 @@ import { cn } from '@/lib/utils'
  * 重叠事件按簇分列排布；含现在时刻指示线。
  */
 
-export type CalendarVariant = 'amber' | 'ink' | 'glass'
+export type CalendarVariant =
+  | 'amber'
+  | 'ink'
+  | 'glass'
+  /** 霜：极浅 tint 底 + 左色条（中间基本置空） */
+  | 'frost'
+  /** 晕：左浓右淡的水平渐变（颜色向中间渐白） */
+  | 'fade'
+  /** 框：白底 + 彩色描边（色彩只在边框与时间上） */
+  | 'outline'
 
 export interface MiniEvent {
   id: string
@@ -102,6 +111,39 @@ const VARIANT_EVENT: Record<CalendarVariant, (e: MiniEvent, c: Column) => React.
     boxShadow: `inset 0 1px 0 rgba(255,255,255,.35), 0 2px 6px ${hexAlpha(e.color, 0.35)}`,
     color: '#ffffff',
   }),
+  // 霜：中间置空的极浅 tint（8%）+ 左色条 + 深字
+  frost: (e) => ({
+    background: hexAlpha(e.color, 0.08),
+    borderLeft: `3px solid ${e.color}`,
+    borderRadius: 8,
+    color: 'var(--color-text-1)',
+  }),
+  // 晕：左浓右淡的水平渐变——左缘有色、向中间渐白（字面意义的"中间置空"）
+  fade: (e) => ({
+    background: `linear-gradient(90deg, ${hexAlpha(e.color, 0.32)} 0%, ${hexAlpha(e.color, 0.07)} 45%, transparent 90%)`,
+    borderLeft: `3px solid ${e.color}`,
+    borderRadius: 8,
+    color: 'var(--color-text-1)',
+  }),
+  // 框：纯白底 + 1.5px 彩色描边，色彩只出现在边框与时间上
+  outline: (e) => ({
+    background: 'var(--color-bg)',
+    border: `1.5px solid ${e.color}`,
+    borderRadius: 8,
+    color: 'var(--color-text-1)',
+  }),
+}
+
+/** 事件时间文字的颜色（变体各自的语言） */
+export function variantTimeColor(variant: CalendarVariant, eventColor: string): string {
+  switch (variant) {
+    case 'glass':
+      return 'rgba(255,255,255,.8)'
+    case 'outline':
+      return eventColor
+    default:
+      return 'var(--color-text-3)'
+  }
 }
 
 function hexAlpha(hex: string, alpha: number): string {
@@ -214,7 +256,7 @@ export function MiniDayCalendar({
                 {e.title}
               </div>
               {!short && (
-                <div className={cn('tnum text-[10px] leading-3', variant === 'glass' ? 'text-white/80' : 'text-text-3')}>
+                <div className="tnum text-[10px] leading-3" style={{ color: variantTimeColor(variant, e.color) }}>
                   {timeLabel(startD)}
                 </div>
               )}
