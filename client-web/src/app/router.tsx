@@ -25,6 +25,20 @@ import { LocationHistoryPage } from '@/features/mobile/pages/location-history-pa
 import { DevicesPage } from '@/features/mobile/pages/devices-page'
 import { DeviceDetailPage } from '@/features/mobile/pages/device-detail-page'
 import { StatusPage } from '@/features/operations/pages/status-page'
+import { FilesPage } from '@/features/files/pages/files-page'
+import { MicrosoftPage } from '@/features/settings/microsoft/microsoft-page'
+import { AppKnowledgeBasePage, CategoryTreePage } from '@/features/knowledge/pages/app-knowledge-page'
+import { EndpointShellPage } from '@/features/endpoints/pages/endpoint-shell-page'
+import { AndroidTodayEmbedPage, AndroidTracksEmbedPage } from '@/embed/android/android-embed-pages'
+import {
+  AdminUsersPage,
+  AiSettingsPage,
+  CalendarDataManagerPage,
+  DataReliabilityPage,
+  McpSettingsPage,
+  PcDetailQueryPage,
+  RecycleBinPage,
+} from '@/features/settings/pages/settings-pages'
 
 /** 路由表（对应规格 01 §4 全量路由；P0 先通骨架与设置域，其余为占位页） */
 export const router = createBrowserRouter([
@@ -34,16 +48,9 @@ export const router = createBrowserRouter([
     children: [
       { path: '/login', element: <LoginPage /> },
 
-      // Android 内嵌页（免认证、无外壳；P4 阶段实现）
-      {
-        path: '/embed/android/*',
-        element: (
-          <UnderConstruction
-            title="Android 内嵌页"
-            subtitle="今日 / 轨迹紧凑页与原生桥（P4 阶段实现）"
-          />
-        ),
-      },
+      // Android 内嵌页（免认证、无外壳；桥见 src/embed/android/bridge.ts）
+      { path: '/embed/android/today', element: <AndroidTodayEmbedPage /> },
+      { path: '/embed/android/tracks', element: <AndroidTracksEmbedPage /> },
 
       {
         element: <RequireAuth />,
@@ -70,7 +77,7 @@ export const router = createBrowserRouter([
 
           // ── 收集 ──
           { path: 'quick-notes', element: <QuickNotesPage /> },
-          { path: 'files', element: <UnderConstruction title="文件" subtitle="OneDrive 三栏文件浏览器（P4 阶段实现）" /> },
+          { path: 'files', element: <FilesPage /> },
 
           // ── 治理 ──
           { path: 'data-center', element: <DataCenterPage /> },
@@ -82,21 +89,21 @@ export const router = createBrowserRouter([
           { path: 'status', element: <StatusPage /> },
           { path: 'settings', element: <SettingsHubPage /> },
           { path: 'settings/server', element: <ServerSettingsPage /> },
-          { path: 'settings/microsoft', element: <UnderConstruction title="Microsoft 账户" subtitle="Outlook 日历 + OneDrive 文件连接（P4 阶段实现）" /> },
-          { path: 'settings/data-reliability', element: <UnderConstruction title="数据可信度" subtitle="13 规则数据体检（P4 阶段实现）" /> },
+          { path: 'settings/microsoft', element: <MicrosoftPage /> },
+          { path: 'settings/data-reliability', element: <DataReliabilityPage /> },
           { path: 'settings/sync', element: <Navigate to="/settings/microsoft?tab=outlook" replace /> },
-          { path: 'settings/ai', element: <UnderConstruction title="AI 设置" subtitle="LiteLLM 状态/用量/请求日志（P4 阶段实现）" /> },
-          { path: 'settings/mcp', element: <UnderConstruction title="MCP 设置" subtitle="客户端/令牌/权限管理（P4 阶段实现）" /> },
-          { path: 'settings/calendar-data', element: <UnderConstruction title="日程数据管理" subtitle="日程事件批量管理与 ICS 导入导出（P4 阶段实现）" /> },
-          { path: 'settings/recycle-bin', element: <UnderConstruction title="回收站" subtitle="日历域回收站与恢复预览（P4 阶段实现）" /> },
-          { path: 'settings/pc-data', element: <UnderConstruction title="PC 明细查询" subtitle="PC 原始记录 14 字段明细查询（P4 阶段实现）" /> },
-          { path: 'settings/users', element: <UnderConstruction title="用户管理" subtitle="管理员用户/角色管理（P4 阶段实现）" /> },
+          { path: 'settings/ai', element: <AiSettingsPage /> },
+          { path: 'settings/mcp', element: <McpSettingsPage /> },
+          { path: 'settings/calendar-data', element: <CalendarDataManagerPage /> },
+          { path: 'settings/recycle-bin', element: <RecycleBinPage /> },
+          { path: 'settings/pc-data', element: <PcDetailQueryPage /> },
+          { path: 'settings/users', element: <AdminUsersPage /> },
 
           // ── 其它 ──
-          { path: 'app-knowledge-base', element: <UnderConstruction title="应用知识库" subtitle="应用/域名知识库（P4 阶段实现）" /> },
-          { path: 'app-knowledge-base/categories', element: <UnderConstruction title="分类树" subtitle="分类树编辑器（P4 阶段实现）" /> },
+          { path: 'app-knowledge-base', element: <AppKnowledgeBasePage /> },
+          { path: 'app-knowledge-base/categories', element: <CategoryTreePage /> },
           { path: 'audit/:objectType/:objectId', element: <AuditTimelinePage /> },
-          { path: 'endpoint-shell', element: <UnderConstruction title="端点外壳" subtitle="设备端点心跳/采集质量调试页（P4 阶段实现）" /> },
+          { path: 'endpoint-shell', element: <EndpointShellPage /> },
           { path: 'exhibition', element: <UnderConstruction title="展览馆" subtitle="图表组件陈列馆（P2 阶段实现）" /> },
           { path: 'devices', element: <DevicesPage /> },
           { path: 'devices/:deviceId', element: <DeviceDetailPage /> },

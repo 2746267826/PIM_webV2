@@ -632,5 +632,154 @@ if (path === '/api/v1/mobile/analytics/heatmap') {
   return
 }
 
+/* P4-MOCK-BLOCK */
+if (path === '/api/v1/files/providers') {
+  ok(res, [{ id: 'prov-1', provider: 'onedrive', status: 'connected', clientId: '11111111-2222-3333-4444-555555555555', driveId: 'drive-abc', accountId: 'acc-1', accountName: 'demo@outlook.com', syncStatus: 'idle', syncedItemCount: 1284, lastSyncAt: at(9), lastError: null, tokenExpiresAt: null }])
+  return
+}
+if (path === '/api/v1/files/items') {
+  const dir = url.searchParams.get('path') ?? '/'
+  const type = url.searchParams.get('type')
+  const mk = (id, name, itemType, size, mime, ipath) => ({ id, providerId: 'prov-1', externalFileId: 'ext-' + id, parentExternalFileId: null, path: ipath, name, itemType, mimeType: mime, size, etag: null, contentHash: null, createdAt: daysAgo(20), modifiedAt: daysAgo(1), syncedAt: new Date().toISOString(), indexStatus: 'not_indexed' })
+  let items = dir === '/'
+    ? [mk('f1', '文档', 'folder', null, null, '/文档'), mk('f2', '图片', 'folder', null, null, '/图片'), mk('f3', '项目', 'folder', null, null, '/项目')]
+    : dir === '/文档'
+      ? [mk('d1', '周报.md', 'file', 24576, 'text/markdown', '/文档/周报.md'), mk('d2', '设计说明.txt', 'file', 4096, 'text/plain', '/文档/设计说明.txt'), mk('d3', '预算.xlsx', 'file', 88234, 'application/vnd.ms-excel', '/文档/预算.xlsx')]
+      : dir === '/图片'
+        ? [mk('i1', '截图-日历.png', 'file', 204800, 'image/png', '/图片/截图-日历.png'), mk('i2', '架构图.png', 'file', 512000, 'image/png', '/图片/架构图.png')]
+        : [mk('p1', 'README.md', 'file', 2048, 'text/markdown', dir + '/README.md')]
+  if (type === 'folder') items = items.filter((i) => i.itemType === 'folder')
+  ok(res, { result: { items, page: 1, pageSize: 100, totalCount: items.length, totalPages: 1 } })
+  return
+}
+if (path === '/api/v1/files/search') {
+  const kw = (url.searchParams.get('q') ?? '').toLowerCase()
+  const all = [{ id: 'd1', name: '周报.md', path: '/文档/周报.md', itemType: 'file', mimeType: 'text/markdown', size: 24576, providerId: 'prov-1', externalFileId: 'ext-d1', parentExternalFileId: null, etag: null, contentHash: null, createdAt: daysAgo(20), modifiedAt: daysAgo(1), syncedAt: new Date().toISOString(), indexStatus: 'not_indexed' }]
+  const items = all.filter((i) => i.name.toLowerCase().includes(kw))
+  ok(res, { items, totalCount: items.length, totalPages: 1 })
+  return
+}
+if (/[f]iles\/providers\/[^/]+\/sync-status$/.test(path)) { ok(res, { syncStatus: 'idle', lastError: null, lastSyncAt: at(9), syncedItemCount: 1284 }); return }
+if (/[f]iles\/providers\/[^/]+\/sync$/.test(path)) { readBody(() => ok(res, { started: true, message: '已开始同步' })); return }
+if (/[f]iles\/providers\/[^/]+\/binding-status$/.test(path)) { ok(res, { status: 'pending', driveId: null, accountId: null, accountName: null, userCode: 'ABCD-1234', verificationUri: 'https://microsoft.com/devicelogin', deviceCodeExpiresAt: plusDays(0.05) }); return }
+if (/[f]iles\/items\/[^/]+\/text$/.test(path) && req.method === 'GET') {
+  ok(res, { content: '# 周报\n\n## 本周完成\n- P3 分析驾驶舱\n- P4 文件与设置域\n\n## 下周计划\n- 双壳打包与打磨\n', mimeType: 'text/markdown', size: 120, truncated: false })
+  return
+}
+if (/[f]iles\/items\/[^/]+\/snapshots$/.test(path)) {
+  ok(res, [{ id: 'snap-1', path: '/文档/周报.md', name: '周报.md', content: '# 周报（旧版）...', byteSize: 110, reason: 'pre-edit', createdAt: at(9, 30) }])
+  return
+}
+if (/[f]iles\/items\/[^/]+\/shares$/.test(path)) {
+  ok(res, [{ itemId: 'd1', itemName: '周报.md', path: '/文档/周报.md', permissionType: 'view', permissionId: 'perm-1', webUrl: 'https://1drv.ms/xxxx', expiresAt: null, createdAt: at(10) }])
+  return
+}
+if (path === '/api/v1/files/shares') {
+  ok(res, [{ itemId: 'd1', itemName: '周报.md', path: '/文档/周报.md', permissionType: 'view', permissionId: 'perm-1', webUrl: 'https://1drv.ms/xxxx', expiresAt: null, createdAt: at(10) }])
+  return
+}
+if (/[f]iles\/items\/[^/]+\/(download-url|preview-url|open-link|content|thumbnail)$/.test(path)) {
+  const u = 'https://example.invalid/file'
+  if (path.endsWith('thumbnail') || path.endsWith('content')) { res.writeHead(302, { location: u }); res.end(); return }
+  ok(res, { url: u, mode: 'onedrive-web' })
+  return
+}
+if (/[f]iles\/items\/[^/]+\/share$/.test(path)) {
+  readBody(() => ok(res, { itemId: 'd1', itemName: '周报.md', path: '/文档/周报.md', permissionType: 'view', permissionId: 'perm-2', webUrl: 'https://1drv.ms/new', expiresAt: null, createdAt: new Date().toISOString() }))
+  return
+}
+if (/[f]iles\/items\/upload-session$/.test(path)) {
+  readBody((b) => ok(res, { uploadUrl: 'https://example.invalid/upload', expirationDateTime: null, path: b.path ?? '/', fileName: b.fileName ?? 'file' }))
+  return
+}
+if (/[f]iles\/items\/upload-session\/complete$/.test(path)) {
+  readBody((b) => ok(res, { id: 'new-1', providerId: 'prov-1', externalFileId: 'ext-new', parentExternalFileId: null, path: (b.path ?? '/') + '/' + (b.fileName ?? 'file'), name: b.fileName ?? 'file', itemType: 'file', mimeType: null, size: 1024, etag: null, contentHash: null, createdAt: new Date().toISOString(), modifiedAt: new Date().toISOString(), syncedAt: new Date().toISOString(), indexStatus: 'not_indexed' }))
+  return
+}
+if (path === '/api/v1/data-reliability/inspection' || path === '/api/v1/data-reliability/inspection/refresh') {
+  const mkRule = (code, name, group, groupLabel, status) => ({ code, key: code, name, group, groupLabel, status, statusLabel: status === 'red' ? '红灯' : status === 'yellow' ? '黄灯' : '绿灯', detail: name + '检查完成', currentValueLabel: status === 'green' ? '0 违规' : '3 违规', threshold: '小于等于 0', criterion: '当 ' + name + ' 超出阈值时判为违规', rationale: '该判据来自数据不变量定义', totalViolations: status === 'green' ? 0 : 3, newViolations: status === 'green' ? 0 : 1, historicalViolations: status === 'green' ? 0 : 2, samples: status === 'green' ? [] : ['样例 A', '样例 B'] })
+  ok(res, { inspectedAtUtc: new Date().toISOString(), redCount: 1, yellowCount: 2, greenCount: 10, totalViolations: 9, newViolations: 3, message: '体检完成', rules: [mkRule('S1', '会话重叠', 'A', '会话与事件一致性', 'red'), mkRule('S2', '三态分布', 'A', '会话与事件一致性', 'yellow'), mkRule('S3', '空标题', 'B', '元数据完整性', 'green'), mkRule('S4', '时区缺失', 'B', '元数据完整性', 'yellow')] })
+  return
+}
+if (/data-reliability\/rules\/[^/]+\/violations$/.test(path)) {
+  ok(res, { ruleCode: 'S1', generatedAtUtc: new Date().toISOString(), totalCount: 3, truncated: false, items: [{ ruleCode: 'S1', id: 'v1', deviceId: 'ws-01', occurredAtUtc: at(10), fields: { app: 'Code.exe' } }] })
+  return
+}
+if (path === '/api/v1/ai/status') { ok(res, { enabled: true, provider: 'litellm', baseUrl: 'http://127.0.0.1:4000', defaultModel: 'gpt-4o-mini', lastHealthCheckAt: at(10), lastError: null, recentSuccessfulCallAt: at(10, 5) }); return }
+if (path === '/api/v1/ai/usage/summary') { ok(res, { requestCount: 128, successCount: 121, failureCount: 7, totalTokens: 486123, estimatedCost: 1.2345 }); return }
+if (path === '/api/v1/ai/requests') {
+  const items = Array.from({ length: 8 }, (_, i) => ({ id: 'log-' + i, startedAt: at(10 - (i % 3), i * 5), module: ['calendar', 'files', 'pc'][i % 3], purpose: ['suggest', 'classify', 'summarize'][i % 3], model: 'gpt-4o-mini', status: i === 3 ? 'Failed' : 'Succeeded', totalTokens: 1200 + i * 130, estimatedCost: 0.0032, durationMs: 800 + i * 120 }))
+  ok(res, { items, totalCount: 128, page: 1, pageSize: 20, totalPages: 7 })
+  return
+}
+if (/ai\/requests\/[^/]+$/.test(path)) { ok(res, { id: 'log-1', module: 'calendar', purpose: 'suggest', model: 'gpt-4o-mini', status: 'Succeeded', requestMessagesJson: '[]', responseText: 'ok', totalTokens: 1200 }); return }
+if (/ai\/(test|health-check)$/.test(path)) { ok(res, { status: 'Succeeded', responseText: 'ok', userFacingError: null }); return }
+if (path === '/api/v1/mcp/clients') {
+  ok(res, [{ id: 'mc-1', name: 'Claude Code', status: 'active', tokenPrefix: 'pim_mcp_ab12', permissions: { read: {}, write: {} }, createdAt: daysAgo(5), revokedAt: null, lastSeenAt: new Date(Date.now() - 120000).toISOString(), callCount: 342, writeCallCount: 12, lastTool: 'get_calendar_layers', online: true, createdByUsername: 'demo' }])
+  return
+}
+if (path === '/api/v1/mcp/activity') {
+  ok(res, Array.from({ length: 6 }, (_, i) => ({ timestamp: new Date(Date.now() - i * 60000).toISOString(), clientName: 'Claude Code', toolName: 'get_today_sections', statusCode: i === 2 ? 403 : 200, durationMs: 40 + i * 15, argumentsSummary: '{"q":"x"}' })))
+  return
+}
+if (path === '/api/v1/mcp/catalog') {
+  const mkTools = (prefix, n) => Array.from({ length: n }, (_, i) => ({ name: prefix + '_tool_' + i, group: prefix, description: prefix + ' tool ' + i }))
+  ok(res, { read: mkTools('calendar', 6).concat(mkTools('files', 4)), write: mkTools('quicknotes', 4) })
+  return
+}
+if (/mcp\/clients\/[^/]+\/revoke$/.test(path)) { readBody(() => ok(res, null)); return }
+if (/mcp\/clients/.test(path)) { readBody((b) => ok(res, { token: 'pim_mcp_newtoken0123456789abcdef', client: { id: 'mc-2', name: b.name ?? 'new' } })); return }
+if (path === '/api/v1/admin/users') {
+  ok(res, [{ id: 'u1', username: 'demo', email: 'demo@pim.dev', displayName: '演示用户', role: 'admin', isActive: true, createdAt: daysAgo(60) }, { id: 'u2', username: 'alice', email: 'alice@pim.dev', displayName: 'Alice', role: 'user', isActive: true, createdAt: daysAgo(10) }])
+  return
+}
+if (/admin\/users\/[^/]+\/(role|status)$/.test(path)) { readBody(() => ok(res, { id: 'u2', role: 'user', isActive: true })); return }
+if (path === '/api/v1/pc/app-knowledge/apps') {
+  ok(res, [
+    { id: 'kb-1', processName: 'Code.exe', displayName: 'VS Code', categoryPath: '开发/编辑器', productivity: 'productive', source: 'builtin', icon: 'V', contextCount: 3, pendingContextCount: 0 },
+    { id: 'kb-2', processName: 'Obsidian.exe', displayName: 'Obsidian', categoryPath: null, productivity: 'neutral', source: 'learned', icon: 'O', contextCount: 1, pendingContextCount: 1 },
+  ])
+  return
+}
+if (/app-knowledge\/apps\/[^/]+\/contexts$/.test(path)) {
+  ok(res, [{ id: 'ctx-1', processName: 'Code.exe', patternType: 'domain', patternValue: 'github.com', targetCategoryName: '开发', scopeSummary: 'github.com 全站', source: 'learned', enabled: true, affectedRecordCount: 42 }])
+  return
+}
+if (/app-knowledge\/contexts\/[^/]+$/.test(path) && req.method === 'DELETE') { ok(res, '已删除。'); return }
+if (path === '/api/v1/pc/app-signatures/') { readBody((b) => ok(res, { id: 'sig-new' })); return }
+if (/pc\/app-signatures\/[^/]+$/.test(path) && req.method === 'DELETE') { ok(res, '已删除'); return }
+if (path === '/api/v1/pc/categories/tree') {
+  ok(res, [{ id: 'cat-1', parentId: null, name: '开发', color: '#2563EB', icon: '💻', productivity: 'productive', sortOrder: 1, isBuiltin: true, children: [{ id: 'cat-1-1', parentId: 'cat-1', name: '编辑器', color: '#3B82F6', icon: null, productivity: 'productive', sortOrder: 1, isBuiltin: false, children: [] }] }, { id: 'cat-2', parentId: null, name: '学习', color: '#8B5CF6', icon: '📚', productivity: 'productive', sortOrder: 2, isBuiltin: true, children: [] }, { id: 'cat-3', parentId: null, name: '娱乐', color: '#F97316', icon: '🎮', productivity: 'distracting', sortOrder: 3, isBuiltin: true, children: [] }])
+  return
+}
+if (path === '/api/v1/pc/categories' || path === '/api/v1/pc/categories/') { readBody((b) => ok(res, { id: b.id ?? 'cat-new', parentId: b.parentId ?? null, name: b.name ?? '新分类', color: b.color ?? '#64748B', icon: b.icon ?? null, productivity: b.productivity ?? 'neutral', sortOrder: 9, isBuiltin: false, children: [] })); return }
+if (/pc\/categories\/seed$/.test(path)) { ok(res, '种子数据已初始化'); return }
+if (/pc\/categories\/[^/]+$/.test(path) && req.method === 'DELETE') { ok(res, '已删除'); return }
+if (path === '/api/v1/endpoints') {
+  ok(res, [{ deviceId: 'ws-01', platform: 'windows', appVersion: '1.4.0', uploadStatus: 'Healthy', collectionCacheCount: 0, onlineOnlyBlockedCount: 1, lastHeartbeatAt: new Date().toISOString() }])
+  return
+}
+if (/endpoints\/[^/]+\/collection-quality$/.test(path)) { ok(res, { deviceId: 'ws-01', platform: 'windows', uploadStatus: 'Healthy', issueCount: 0, checkedAt: new Date().toISOString() }); return }
+if (/endpoints\/[^/]+\/heartbeat$/.test(path)) { readBody(() => ok(res, { deviceId: 'ws-01', platform: 'windows', uploadStatus: 'Healthy', collectionCacheCount: 0, onlineOnlyBlockedCount: 0, lastHeartbeatAt: new Date().toISOString() })); return }
+if (/endpoints\/[^/]+\/notification-actions$/.test(path)) { readBody((b) => ok(res, { result: String(b.riskLevel ?? '').startsWith('L4') ? 'OpenDetailRequired' : 'Executed', detailUrl: String(b.riskLevel ?? '').startsWith('L4') ? '/confirmations' : null, message: '已记录' })); return }
+
+if (path === '/api/v1/mobile/summary') {
+  ok(res, {
+    date: url.searchParams.get('date') ?? new Date().toISOString().slice(0, 10),
+    deviceId: null, generatedAt: new Date().toISOString(),
+    totalForegroundSeconds: 11160, fallbackForegroundSeconds: 1200, appSwitchCount: 84, appsUsed: 12, completeness: 0.82,
+    lastSyncAt: at(8),
+    appRanking: [
+      { packageName: 'com.tencent.mm', displayName: '微信', categoryName: '聊天', foregroundSeconds: 4080, sessionCount: 32, launchCount: 40, lastUsedAt: at(21), source: 'events', share: 0.37 },
+      { packageName: 'com.ss.android.ugc.aweme', displayName: '抖音', categoryName: '视频', foregroundSeconds: 2700, sessionCount: 18, launchCount: 22, lastUsedAt: at(22), source: 'events', share: 0.24 },
+      { packageName: 'tv.danmaku.bili', displayName: 'B站', categoryName: '视频', foregroundSeconds: 1980, sessionCount: 12, launchCount: 14, lastUsedAt: at(20), source: 'events', share: 0.18 },
+      { packageName: 'com.zhihu.android', displayName: '知乎', categoryName: '学习', foregroundSeconds: 1440, sessionCount: 9, launchCount: 11, lastUsedAt: at(19), source: 'fallback', share: 0.13 },
+      { packageName: 'com.tencent.mtt', displayName: 'QQ浏览器', categoryName: '其他', foregroundSeconds: 960, sessionCount: 7, launchCount: 8, lastUsedAt: at(18), source: 'events', share: 0.08 },
+    ],
+    syncBatches: [], qualityIssueCount: 0,
+  })
+  return
+}
+
   json(res, 404, { code: 404, message: `接口不存在: ${path}`, data: null, timestamp: new Date().toISOString() })
 }).listen(5858, () => console.log('mock api on :5858'))
