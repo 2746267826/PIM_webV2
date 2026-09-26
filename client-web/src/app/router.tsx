@@ -6,6 +6,10 @@ import { SetupPage } from '@/features/server/pages/setup-page'
 import { ServerSettingsPage } from '@/features/server/pages/server-settings-page'
 import { SettingsHubPage } from '@/features/settings/pages/settings-hub-page'
 import { NotFoundPage, UnderConstruction } from '@/features/placeholders/under-construction'
+import { CalendarPage } from '@/features/calendar/pages/calendar-page'
+import { TasksPage } from '@/features/calendar/pages/tasks-page'
+import { TodayPage } from '@/features/today/pages/today-page'
+import { ConfirmationsPage } from '@/features/operations/pages/confirmations-page'
 
 /** 路由表（对应规格 01 §4 全量路由；P0 先通骨架与设置域，其余为占位页） */
 export const router = createBrowserRouter([
@@ -36,11 +40,11 @@ export const router = createBrowserRouter([
           { index: true, element: <Navigate to="/today" replace /> },
 
           // ── 工作 ──
-          { path: 'today', element: <UnderConstruction title="今日" subtitle="服务器驱动的分区仪表盘（P1 阶段实现）" /> },
-          { path: 'calendar', element: <UnderConstruction title="日历" subtitle="时间轴/月视图、拖选与任务排期（P1 阶段实现）" /> },
+          { path: 'today', element: <TodayPage /> },
+          { path: 'calendar', element: <CalendarPage /> },
           { path: 'workbench', element: <UnderConstruction title="工作台" subtitle="运营驾驶舱与 AI 排程建议（P2 阶段实现）" /> },
-          { path: 'tasks', element: <UnderConstruction title="任务" subtitle="任务列表、层级与批操作（P1 阶段实现）" /> },
-          { path: 'confirmations', element: <UnderConstruction title="确认中心" subtitle="待确认操作两步武装确认（P1 阶段实现）" /> },
+          { path: 'tasks', element: <TasksPage /> },
+          { path: 'confirmations', element: <ConfirmationsPage /> },
 
           // ── 洞察 ──
           { path: 'pc-tracker', element: <UnderConstruction title="电脑记录" subtitle="PC 活动分析仪表盘（P3 阶段实现）" /> },

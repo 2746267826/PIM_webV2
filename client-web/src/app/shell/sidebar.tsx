@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router'
 import { LogOut, Server } from 'lucide-react'
 import { useAuth } from '@/features/auth/auth-context'
 import { useStatusSummary } from '@/api/version'
+import { CalendarBooksManager } from '@/features/calendar/components/calendar-books-manager'
 import { getApiBase } from '@/lib/apiBase'
 import { HEALTH_LABEL, normalizeHealthStatus } from '@/lib/enums'
 import { cn } from '@/lib/utils'
@@ -152,13 +153,8 @@ function SidebarContent({
           </div>
         ))}
 
-        {/* 日历本管理器（P1 阶段接入数据与 CRUD） */}
-        {!compact && (
-          <div className="mb-1">
-            <div className="px-2.5 pt-3 pb-1 text-xs font-medium text-text-3">日历本</div>
-            <div className="px-2.5 py-1 text-xs text-text-4">将在日历阶段接入</div>
-          </div>
-        )}
+        {/* 日历本管理器（新建/重命名/显隐/删除预览，点击跳转） */}
+        <CalendarBooksManager onNavigate={onNavigate} />
       </nav>
 
       {/* 底部：状态点 + 用户 + 服务器 */}

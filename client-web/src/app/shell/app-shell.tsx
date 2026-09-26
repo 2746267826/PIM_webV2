@@ -9,6 +9,7 @@ import { installScrollTracking } from '@/lib/polling'
 import { Drawer, DrawerContent } from '@/components/ui'
 import { GlobalFab } from './global-fab'
 import { SidebarContent } from './sidebar'
+import { CalendarVisibilityProvider } from '@/features/calendar/calendar-visibility'
 
 /** 页脚：本地版本 / API 版本 / "有可用更新"标记 / 当前服务器 */
 function AppFooter() {
@@ -45,7 +46,8 @@ export function AppShell() {
   }, [pathname])
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <CalendarVisibilityProvider>
+      <div className="flex min-h-dvh flex-col">
       {/* 移动顶条 */}
       <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-bg px-3 md:hidden">
         <button
@@ -90,6 +92,7 @@ export function AppShell() {
           <SidebarContent onNavigate={() => setMobileNavOpen(false)} />
         </DrawerContent>
       </Drawer>
-    </div>
+      </div>
+    </CalendarVisibilityProvider>
   )
 }

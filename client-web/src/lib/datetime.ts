@@ -1,0 +1,84 @@
+import { format, parseISO } from 'date-fns'
+
+/** ISO → datetime-local 输入值（本地时区）'yyyy-MM-ddTHH:mm' */
+export function toLocalInputValue(iso: string | null | undefined): string {
+  if (!iso) return ''
+  try {
+    return format(parseISO(iso), "yyyy-MM-dd'T'HH:mm")
+  } catch {
+    return ''
+  }
+}
+
+/** datetime-local 输入值 → ISO（UTC，带 Z） */
+export function fromLocalInputValue(value: string): string | null {
+  if (!value) return null
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+
+/** 显示时间：同日 HH:mm，跨日 MM-dd HH:mm（相对 now） */
+export function formatTime(iso: string, now: Date = new Date()): string {
+  const d = parseISO(iso)
+  return format(d, sameDay(d, now) ? 'HH:mm' : 'MM-dd HH:mm')
+}
+
+/** 显示日期范围：09-26 09:00 ~ 11:00 或跨日 09-26 09:00 ~ 09-27 11:00 */
+export function formatRange(startIso: string, endIso: string): string {
+  const s = parseISO(startIso)
+  const e = parseISO(endIso)
+  return sameDay(s, e)
+    ? `${format(s, 'MM-dd HH:mm')} ~ ${format(e, 'HH:mm')}`
+    : `${format(s, 'MM-dd HH:mm')} ~ ${format(e, 'MM-dd HH:mm')}`
+}
+
+function sameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  )
+}
+
+/** TimeSpan "c" 格式（01:30:00）→ 中文时长（1 小时 30 分） */
+export function formatDurationC(value: string | null | undefined): string {
+  if (!value) return ''
+  const m = /^(\d+):(\d{2})(?::(\d{2}))?$/.exec(value)
+  if (!m) return value
+  const [, h, min] = m
+  const hours = Number(h)
+  const minutes = Number(min)
+  if (hours && minutes) return `${hours} 小时 ${minutes} 分`
+  if (hours) return `${hours} 小时`
+  return `${minutes} 分钟`
+}
+
+/** 分钟 → hh:mm:ss（后端 estimatedDuration 接受 TimeSpan "c" 格式） */
+export function minutesToDurationC(minutes: number): string {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`
+}
+
+/** ISO8601 时长（PT1H30M）或 hh:mm:ss → 分钟（解析失败返回 null） */
+export function durationToMinutes(value: string | null | undefined): number | null {
+  if (!value) return null
+  const iso = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:([\d.]+)S)?$/.exec(value)
+  if (iso) return Number(iso[1] ?? 0) * 60 + Math.round(Number(iso[2] ?? 0))
+  const c = /^(\d+):(\d{2})(?::(\d{2}))?$/.exec(value)
+  if (c) return Number(c[1]) * 60 + Number(c[2])
+  return null
+}
+
+/** 日期 → 该日业务日口径的 ISO 窗口参数（日历查询用本地零点即可，业务日仅 PC/移动域） */
+export function dayStartIso(d: Date): string {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x.toISOString()
+}
+
+export function dayEndIso(d: Date): string {
+  const x = new Date(d)
+  x.setHours(23, 59, 59, 999)
+  return x.toISOString()
+}
