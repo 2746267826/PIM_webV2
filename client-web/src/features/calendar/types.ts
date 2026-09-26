@@ -178,6 +178,150 @@ export interface CalendarDeletePreview {
   requiresStrictConfirmation: boolean
 }
 
+/* ── 提醒（05/calendar.md §提醒） ─────────────────────────── */
+
+export interface ReminderResponse {
+  id: string
+  relatedObjectType: string
+  relatedObjectId: string
+  title: string
+  body: string
+  triggerReason: string
+  riskLevel: number | string
+  channels: string[]
+  doNotDisturbStart: string | null
+  doNotDisturbEnd: string | null
+  scheduledAt: string
+  status: 'Open' | 'Snoozed' | 'Dismissed'
+}
+
+export interface ReminderDelivery {
+  id: string
+  reminderId: string
+  channel: string
+  status: string
+  payloadJson: string
+  createdAt: string
+  respondedAt: string | null
+}
+
+export interface ReminderActionResponse {
+  kind: 'Executed' | 'OpenDetailRequired'
+  status: string
+  detailUrl: string | null
+}
+
+/* ── 报告 ─────────────────────────────────────────────────── */
+
+export interface ReportArtifact {
+  id: string
+  kind: 'Daily' | 'Weekly' | 'Monthly' | 'Project'
+  projectId: string | null
+  riskLevel: string
+  contentMarkdown: string
+  metricsJson: string
+  generatedAt: string
+  status: 'Active' | 'Archived'
+}
+
+/* ── 习惯 ─────────────────────────────────────────────────── */
+
+export interface HabitRoutine {
+  id: string
+  title: string
+  cadence: 'Daily' | 'Weekly' | 'Monthly' | 'Custom'
+  source: string
+  status: string
+}
+
+/* ── AI 排程占位（工作台） ─────────────────────────────────── */
+
+export interface AiPlanPlaceholder {
+  id: string
+  title: string
+  startsAt: string
+  endsAt: string
+  reason: string
+  status: 'Suggested' | 'PendingConfirmation' | 'Dismissed'
+  source: string
+  confirmationId: string | null
+}
+
+export interface GenerateAiPlanResponse {
+  source: 'ai' | 'rule-engine' | 'none'
+  placeholders: AiPlanPlaceholder[]
+}
+
+/* ── Outlook 状态（工作台状态卡） ──────────────────────────── */
+
+export interface OutlookSettings {
+  provider: string
+  clientId: string | null
+  status: string
+  tokenHealth: string
+  lastSyncedAt: string | null
+  lastError: string | null
+  uiStatus: string
+}
+
+export interface OutlookSyncBatch {
+  id: string
+  provider: string
+  status: string
+  readCount: number
+  createdCount: number
+  updatedCount: number
+  conflictCount: number
+  confirmationCount: number
+  failureCount: number
+  errorSummary: string | null
+  startedAt: string
+  finishedAt: string | null
+}
+
+/* ── 数据中心（跨对象治理） ───────────────────────────────── */
+
+export type DataCenterObjectType =
+  | 'event'
+  | 'task'
+  | 'task-segment'
+  | 'habit'
+  | 'habit-occurrence'
+  | 'availability'
+  | 'reminder'
+  | 'report'
+  | 'sync-batch'
+  | 'sync-conflict'
+  | 'audit-version'
+
+export interface DataCenterItem {
+  objectType: DataCenterObjectType
+  objectId: string
+  title: string
+  source: string
+  status: string
+  startsAt: string | null
+  endsAt: string | null
+  summary: string
+}
+
+export interface DataCenterQueryResponse {
+  items: DataCenterItem[]
+  page: number
+  pageSize: number
+  totalCount: number
+}
+
+export interface RestorePreviewResponse {
+  objectType: string
+  objectId: string
+  summary: string
+  requiresConfirmation: boolean
+  changedFields: string[]
+  beforeJson: string | null
+  afterJson: string | null
+}
+
 /* ── Outlook 写回（409/412 冲突语义在 data 内） ───────────── */
 
 export interface OutlookWriteResult {

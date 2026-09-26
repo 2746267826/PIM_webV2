@@ -11,6 +11,7 @@ interface ErrorBoundaryProps {
 
 interface ErrorBoundaryState {
   error: Error | null
+  stack: string | null
 }
 
 /**
@@ -18,10 +19,10 @@ interface ErrorBoundaryState {
  * 数据层错误走 TanStack Query 重试与 toast；本组件只兜渲染异常。
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { error: null }
+  state: ErrorBoundaryState = { error: null, stack: null }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { error }
+    return { error, stack: error.stack?.split('\n').slice(1, 5).join('\n') ?? null }
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -55,6 +56,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         <AlertTriangle className="size-8 text-warn" strokeWidth={1.5} aria-hidden />
         <div className="text-base font-semibold text-text-1">页面出错了</div>
         <div className="max-w-[420px] text-[13px] break-all text-text-3">{error.message}</div>
+        {this.state.stack && (
+          <pre className="mono max-w-[720px] overflow-auto rounded-ctl bg-surface px-4 py-3 text-left text-xs text-text-3">
+            {this.state.stack}
+          </pre>
+        )}
         <div className="mt-2 flex gap-2">
           <Button variant="primary" onClick={this.reset}>
             重试

@@ -238,3 +238,131 @@ export function useAddSegment() {
     onSuccess: () => invalidateCalendar(qc),
   })
 }
+
+/* ── P2：提醒 / 报告 / 习惯 / AI 建议 / Outlook / 数据中心 ── */
+
+export const calendarExtraKeys = {
+  reminders: ['calendar', 'reminders'] as const,
+  deliveryLog: ['calendar', 'reminders', 'delivery-log'] as const,
+  reports: ['calendar', 'reports'] as const,
+  habits: ['calendar', 'habits'] as const,
+  aiSuggestions: ['calendar', 'ai-placeholders', 'suggested'] as const,
+  outlookSettings: ['calendar', 'outlook', 'settings'] as const,
+  outlookBatches: ['calendar', 'outlook', 'batches'] as const,
+  dataCenter: (params: Record<string, unknown>) => ['calendar', 'data-center', params] as const,
+}
+
+export function useReminders() {
+  return useQuery({
+    queryKey: calendarExtraKeys.reminders,
+    queryFn: remindersApiList,
+    refetchInterval: () => standardIntervalMs(),
+  })
+}
+
+function remindersApiList() {
+  return import('./api').then((m) => m.remindersApi.list())
+}
+
+export function useDeliveryLog(enabled: boolean) {
+  return useQuery({
+    queryKey: calendarExtraKeys.deliveryLog,
+    queryFn: () => import('./api').then((m) => m.remindersApi.deliveryLog()),
+    enabled,
+  })
+}
+
+export function useReports() {
+  return useQuery({ queryKey: calendarExtraKeys.reports, queryFn: () => import('./api').then((m) => m.reportsApi.list()) })
+}
+
+export function useHabits() {
+  return useQuery({ queryKey: calendarExtraKeys.habits, queryFn: () => import('./api').then((m) => m.habitsApi.list()) })
+}
+
+export function useAiSuggestions() {
+  return useQuery({
+    queryKey: calendarExtraKeys.aiSuggestions,
+    queryFn: () => import('./api').then((m) => m.aiPlaceholdersApi.list()),
+    refetchInterval: () => standardIntervalMs(),
+  })
+}
+
+export function useOutlookSettings() {
+  return useQuery({
+    queryKey: calendarExtraKeys.outlookSettings,
+    queryFn: () => import('./api').then((m) => m.outlookApi.settings()),
+    refetchInterval: () => standardIntervalMs(),
+    meta: { silent: true },
+  })
+}
+
+export function useAiActions() {
+  const qc = useQueryClient()
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ['calendar', 'ai-placeholders'] })
+    void qc.invalidateQueries({ queryKey: ['today'] })
+    void qc.invalidateQueries({ queryKey: ['operations', 'confirmations'] })
+  }
+  return {
+    generate: useMutation({
+      mutationFn: (horizonDays: number) => import('./api').then((m) => m.aiPlaceholdersApi.generate(horizonDays)),
+      onSuccess: invalidate,
+    }),
+    confirm: useMutation({
+      mutationFn: (id: string) => import('./api').then((m) => m.aiPlaceholdersApi.confirm(id)),
+      onSuccess: invalidate,
+    }),
+    dismiss: useMutation({
+      mutationFn: (id: string) => import('./api').then((m) => m.aiPlaceholdersApi.dismiss(id)),
+      onSuccess: invalidate,
+    }),
+  }
+}
+
+export function useReminderActions() {
+  const qc = useQueryClient()
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ['calendar', 'reminders'] })
+    void qc.invalidateQueries({ queryKey: ['today'] })
+  }
+  return {
+    snooze: useMutation({
+      mutationFn: ({ id, at }: { id: string; at?: string }) => import('./api').then((m) => m.remindersApi.snooze(id, at)),
+      onSuccess: invalidate,
+    }),
+    dismiss: useMutation({
+      mutationFn: (id: string) => import('./api').then((m) => m.remindersApi.dismiss(id)),
+      onSuccess: invalidate,
+    }),
+    action: useMutation({
+      mutationFn: ({ id, action }: { id: string; action: string }) =>
+        import('./api').then((m) => m.remindersApi.action(id, action)),
+      onSuccess: invalidate,
+    }),
+  }
+}
+
+export function useCreateHabit() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { title: string; cadence?: string }) => import('./api').then((m) => m.habitsApi.create(body)),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['calendar', 'habits'] }),
+  })
+}
+
+export function useGenerateReport() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { kind: string; date: string }) => import('./api').then((m) => m.reportsApi.generate(body)),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['calendar', 'reports'] }),
+  })
+}
+
+export function useDataCenterQuery(params: Record<string, unknown>) {
+  return useQuery({
+    queryKey: calendarExtraKeys.dataCenter(params),
+    queryFn: () => import('./api').then((m) => m.dataCenterApi.query(params)),
+    placeholderData: (prev) => prev,
+  })
+}

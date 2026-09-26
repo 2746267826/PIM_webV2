@@ -165,3 +165,90 @@ export const scheduleApi = {
       { taskIds },
     ),
 }
+
+/* ── 提醒 ─────────────────────────────────────────────────── */
+
+export const remindersApi = {
+  list: () => apiGet<import('./types').ReminderResponse[]>('/api/v1/calendar/reminders'),
+  snooze: (id: string, scheduledAt?: string) =>
+    apiPost<import('./types').ReminderResponse>(
+      `/api/v1/calendar/reminders/${id}/snooze${scheduledAt ? `?scheduledAt=${encodeURIComponent(scheduledAt)}` : ''}`,
+      {},
+    ),
+  dismiss: (id: string) =>
+    apiPost<import('./types').ReminderResponse>(`/api/v1/calendar/reminders/${id}/dismiss`, {}),
+  action: (id: string, action: string) =>
+    apiPost<import('./types').ReminderActionResponse>(`/api/v1/calendar/reminders/${id}/actions/${action}`, {}),
+  deliveryLog: () => apiGet<import('./types').ReminderDelivery[]>('/api/v1/calendar/reminders/delivery-log'),
+}
+
+/* ── 报告 ─────────────────────────────────────────────────── */
+
+export const reportsApi = {
+  list: () => apiGet<import('./types').ReportArtifact[]>('/api/v1/calendar/reports'),
+  generate: (body: { kind: string; date: string; projectId?: string }) =>
+    apiPost<import('./types').ReportArtifact>('/api/v1/calendar/reports/generate', body),
+  requestSuggestionAction: (suggestionId: string) =>
+    apiPost<unknown>(`/api/v1/calendar/reports/suggestions/${suggestionId}/request-action`, {}),
+}
+
+/* ── 习惯 ─────────────────────────────────────────────────── */
+
+export const habitsApi = {
+  list: () => apiGet<import('./types').HabitRoutine[]>('/api/v1/calendar/habits'),
+  create: (body: { title: string; cadence?: string; ruleJson?: string }) =>
+    apiPost<import('./types').HabitRoutine>('/api/v1/calendar/habits', body),
+}
+
+/* ── AI 排程建议（工作台） ─────────────────────────────────── */
+
+export const aiPlaceholdersApi = {
+  list: (status = 'Suggested') =>
+    apiGet<import('./types').AiPlanPlaceholder[]>(`/api/v1/calendar/ai-placeholders?status=${status}`),
+  generate: (horizonDays: number) =>
+    apiPost<import('./types').GenerateAiPlanResponse>('/api/v1/calendar/ai-placeholders/generate', { horizonDays }),
+  confirm: (id: string) => apiPost<unknown>(`/api/v1/calendar/ai-placeholders/${id}/confirm`, {}),
+  dismiss: (id: string) =>
+    apiPost<import('./types').AiPlanPlaceholder>(`/api/v1/calendar/ai-placeholders/${id}/dismiss`, {}),
+}
+
+/* ── Outlook 状态（工作台状态卡） ──────────────────────────── */
+
+export const outlookApi = {
+  settings: () => apiGet<import('./types').OutlookSettings>('/api/v1/calendar/outlook/settings'),
+  batches: (page = 1, pageSize = 20) =>
+    apiGet<{ items: import('./types').OutlookSyncBatch[]; total: number; page: number; pageSize: number }>(
+      `/api/v1/calendar/outlook/sync/batches?page=${page}&pageSize=${pageSize}`,
+    ),
+}
+
+/* ── 数据中心（跨对象治理） ───────────────────────────────── */
+
+export const dataCenterApi = {
+  query: (body: {
+    search?: string
+    objectType?: string
+    source?: string
+    pendingOnly?: boolean
+    page?: number
+    pageSize?: number
+  }) => apiPost<import('./types').DataCenterQueryResponse>('/api/v1/calendar/data-center/query', body),
+  auditExport: (params?: { start?: string; end?: string }) => {
+    const q = new URLSearchParams()
+    if (params?.start) q.set('start', params.start)
+    if (params?.end) q.set('end', params.end)
+    return apiGet<{ fileName: string; contentType: string; content: string }>(
+      `/api/v1/calendar/data-center/audit/export${q.toString() ? `?${q}` : ''}`,
+    )
+  },
+  restorePreview: (body: { auditVersionId: string; reason?: string }) =>
+    apiPost<import('./types').RestorePreviewResponse>('/api/v1/calendar/data-center/restore/preview', body),
+  batchPreview: (body: { action: string; objects: { objectType: string; objectId: string }[]; reason?: string }) =>
+    apiPost<{
+      riskLevel: string
+      requiresStrictConfirmation: boolean
+      summary: string
+      affectedObjectTypes: string[]
+      affectedCount: number
+    }>('/api/v1/calendar/data-center/batch/preview', body),
+}
