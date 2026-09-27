@@ -70,6 +70,16 @@ export function durationToMinutes(value: string | null | undefined): number | nu
   return null
 }
 
+/**
+ * 任意 ISO（含本地偏移 +08:00）→ UTC ISO（带 Z）。
+ * 后端 DateTime 解析不接受 "+08:00" 形式（返回 500），查询参数一律用 Z 形式。
+ */
+export function toUtcIso(value: string | null | undefined): string | null {
+  if (!value) return null
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+
 /** 日期 → 该日业务日口径的 ISO 窗口参数（日历查询用本地零点即可，业务日仅 PC/移动域） */
 export function dayStartIso(d: Date): string {
   const x = new Date(d)

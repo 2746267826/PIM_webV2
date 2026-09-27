@@ -550,34 +550,13 @@ function OutlookDangerZone({ onChanged }: { onChanged: () => void }) {
   )
 }
 
-/* ── OneDrive Tab：绑定 + 同步 + 同步历史 ─────────────────── */
-
-interface FileSyncBatch {
-  id: string
-  status: string
-  startedAt: string
-  finishedAt: string | null
-  pagesProcessed: number
-  itemsApplied: number
-  itemsDeleted: number
-  fullRecrawl: boolean
-  errorSummary: string | null
-}
+/* ── OneDrive Tab：绑定 + 同步状态 ─────────────────────────── */
 
 function OneDriveTab({ onChanged }: { onChanged: () => void }) {
   const provider = useProviders().data?.[0]
   const syncStatus = useSyncStatus(provider?.id)
   const [bindingSession, setBindingSession] = useState<{ providerId: string; userCode: string; verificationUri: string; expiresAt: string | null } | null>(null)
   const [manualBinding, setManualBinding] = useState(false)
-
-  /* 文件同步历史（新增端点；无则回退为仅展示当前同步状态） */
-  const batches = useQuery({
-    queryKey: ['files', 'sync-batches'],
-    queryFn: () => apiGet<{ items: FileSyncBatch[]; total: number }>('/api/v1/files/sync-batches'),
-    retry: false,
-    meta: { silent: true },
-    refetchInterval: syncStatus.data?.syncStatus === 'syncing' ? 5000 : false,
-  })
 
   const invalidate = () => {
     onChanged()
@@ -725,40 +704,42 @@ function OneDriveTab({ onChanged }: { onChanged: () => void }) {
         />
       )}
 
-      {/* 文件同步历史 */}
+      {/* 同步与令牌详情（后端未提供文件同步批次历史端点，此处展示真实可得的同步态与令牌健康） */}
       <Card className="p-4">
         <div className="flex items-center gap-2">
-          <CardTitle>同步历史</CardTitle>
-          <span className="tnum ml-auto text-xs text-text-4">
-            {batches.isError ? '该端点未提供历史记录' : `共 ${batches.data?.total ?? 0} 批`}
-          </span>
+          <CardTitle>同步与令牌</CardTitle>
+          <span className="ml-auto text-xs text-text-4">数据源：GET /files/providers/{'{id}'}/sync-status</span>
         </div>
-        <div className="mt-3 space-y-2">
-          {batches.isLoading ? (
-            <Skeleton className="h-16" />
-          ) : batches.isError ? (
-            <p className="py-4 text-center text-[13px] text-text-4">
-              后端未提供文件同步批次历史（仅保留当前同步状态，见上方状态卡）。
-            </p>
-          ) : (batches.data?.items.length ?? 0) === 0 ? (
-            <p className="py-4 text-center text-[13px] text-text-4">还没有同步批次</p>
-          ) : (
-            batches.data!.items.map((b) => (
-              <div key={b.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-card border border-border px-3 py-2 text-[12px]">
-                <StatusBadge tone={b.status === 'completed' ? 'ok' : b.status === 'failed' ? 'crit' : 'info'} dot={false}>
-                  {b.status}
-                </StatusBadge>
-                {b.fullRecrawl && <span className="text-warn">全量重扫</span>}
-                <span className="tnum text-text-3">页 {b.pagesProcessed}</span>
-                <span className="tnum text-ok">应用 {b.itemsApplied}</span>
-                <span className="tnum text-text-3">删除 {b.itemsDeleted}</span>
-                <span className="tnum ml-auto text-text-4">
-                  {formatTime(b.startedAt)}
-                  {b.finishedAt && ` → ${formatTime(b.finishedAt)}`}
-                </span>
-                {b.errorSummary && <p className="w-full text-[11px] text-crit">{b.errorSummary}</p>}
-              </div>
-            ))
+        <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-[12px] sm:grid-cols-2">
+          <div className="flex justify-between gap-3 border-b border-divider py-1.5">
+            <span className="text-text-3">同步状态</span>
+            <span className="font-medium text-text-1">
+              {syncStatus.data?.syncStatus === 'syncing' ? '同步中' : syncStatus.data?.syncStatus === 'error' ? '异常' : '空闲'}
+            </span>
+          </div>
+          <div className="flex justify-between gap-3 border-b border-divider py-1.5">
+            <span className="text-text-3">已同步条目</span>
+            <span className="tnum font-medium text-text-1">{syncStatus.data?.syncedItemCount?.toLocaleString() ?? '—'}</span>
+          </div>
+          <div className="flex justify-between gap-3 border-b border-divider py-1.5">
+            <span className="text-text-3">最近同步完成</span>
+            <span className="tnum font-medium text-text-1">{syncStatus.data?.lastSyncAt ? formatTime(syncStatus.data.lastSyncAt) : '—'}</span>
+          </div>
+          <div className="flex justify-between gap-3 border-b border-divider py-1.5">
+            <span className="text-text-3">令牌到期</span>
+            <span className="tnum font-medium text-text-1">{provider?.tokenExpiresAt ? formatTime(provider.tokenExpiresAt) : '—'}</span>
+          </div>
+          <div className="flex justify-between gap-3 border-b border-divider py-1.5 sm:col-span-2">
+            <span className="text-text-3">账号</span>
+            <span className="font-medium text-text-1">
+              {provider?.accountName ?? '—'}
+              {provider?.accountId && <span className="mono ml-2 text-text-4">{provider.accountId}</span>}
+            </span>
+          </div>
+          {provider?.lastError && (
+            <div className="rounded-ctl border border-crit/30 bg-crit-soft px-2.5 py-1.5 text-crit sm:col-span-2">
+              最近错误：{provider.lastError}
+            </div>
           )}
         </div>
       </Card>

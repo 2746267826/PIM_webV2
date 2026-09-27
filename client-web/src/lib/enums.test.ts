@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CADENCE_LABEL,
   normalizeConfirmationStatus,
+  normalizeHabitCadence,
   normalizeHealthStatus,
   normalizeRiskLevel,
   riskTone,
@@ -48,5 +50,29 @@ describe('normalizeConfirmationStatus', () => {
   it('数字 0–4 → 枚举名', () => {
     expect(normalizeConfirmationStatus(0)).toBe('Pending')
     expect(normalizeConfirmationStatus(4)).toBe('Executed')
+  })
+})
+
+describe('normalizeHabitCadence（实测后端按数字序列化：Daily=0…Custom=3）', () => {
+  it('数字 0–3 → 枚举名', () => {
+    expect(normalizeHabitCadence(0)).toBe('Daily')
+    expect(normalizeHabitCadence(1)).toBe('Weekly')
+    expect(normalizeHabitCadence(2)).toBe('Monthly')
+    expect(normalizeHabitCadence(3)).toBe('Custom')
+  })
+
+  it('字符串兼容', () => {
+    expect(normalizeHabitCadence('Weekly')).toBe('Weekly')
+    expect(normalizeHabitCadence('2')).toBe('Monthly')
+  })
+
+  it('未知值兜底 Custom', () => {
+    expect(normalizeHabitCadence(99)).toBe('Custom')
+    expect(normalizeHabitCadence(undefined)).toBe('Custom')
+  })
+
+  it('标签映射完整', () => {
+    expect(CADENCE_LABEL.Daily).toBe('每日')
+    expect(CADENCE_LABEL.Custom).toBe('自定义')
   })
 })

@@ -120,6 +120,41 @@ export const CONFIRMATION_STATUS_LABEL: Record<ConfirmationStatus, string> = {
   Executed: '已执行',
 }
 
+/* ── 习惯频率（HabitCadence：Daily=0 Weekly=1 Monthly=2 Custom=3，实测后端按数字序列化） ── */
+
+export type HabitCadence = 'Daily' | 'Weekly' | 'Monthly' | 'Custom'
+
+const CADENCE_BY_NUMBER: Record<number, HabitCadence> = {
+  0: 'Daily',
+  1: 'Weekly',
+  2: 'Monthly',
+  3: 'Custom',
+}
+
+export function normalizeHabitCadence(v: unknown): HabitCadence {
+  if (typeof v === 'number') return CADENCE_BY_NUMBER[v] ?? 'Custom'
+  switch (String(v)) {
+    case '0':
+    case 'Daily':
+      return 'Daily'
+    case '1':
+    case 'Weekly':
+      return 'Weekly'
+    case '2':
+    case 'Monthly':
+      return 'Monthly'
+    default:
+      return 'Custom'
+  }
+}
+
+export const CADENCE_LABEL: Record<HabitCadence, string> = {
+  Daily: '每日',
+  Weekly: '每周',
+  Monthly: '每月',
+  Custom: '自定义',
+}
+
 /* ── 手机生活分类（服务端枚举，颜色映射见 tokens.css --color-cat-*） ── */
 
 export const LIFE_CATEGORIES = [

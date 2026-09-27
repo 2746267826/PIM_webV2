@@ -31,6 +31,8 @@ interface SettingCard {
   icon: LucideIcon
   /** 仅当页面尚未实现时标记（当前仅展览馆） */
   badge?: '建设中'
+  /** 该卡片对应页面的接口要求 Admin 角色（ai/admin 组 Roles="admin"），非管理员不展示 */
+  adminOnly?: boolean
 }
 
 interface SettingSection {
@@ -59,7 +61,7 @@ const SECTIONS: SettingSection[] = [
   {
     label: '智能与自动化',
     cards: [
-      { to: '/settings/ai', title: 'AI 网关', description: '状态、用量与请求日志', icon: Bot },
+      { to: '/settings/ai', title: 'AI 网关', description: '状态、用量与请求日志', icon: Bot, adminOnly: true },
       { to: '/settings/mcp', title: 'MCP 连接', description: '客户端、令牌与工具权限', icon: Plug },
     ],
   },
@@ -78,7 +80,10 @@ export function SettingsHubPage() {
   const { user } = useAuth()
   const { data: version } = useVersionInfo()
 
-  const sections = [...SECTIONS]
+  const sections = SECTIONS.map((section) => ({
+    ...section,
+    cards: section.cards.filter((card) => !card.adminOnly || user?.role === 'admin'),
+  })).filter((section) => section.cards.length > 0)
   if (user?.role === 'admin') {
     sections.push({
       label: '组织',

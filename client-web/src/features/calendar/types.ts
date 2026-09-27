@@ -1,4 +1,5 @@
 import type { PagedResult } from '@/api/types'
+import type { HabitCadence } from '@/lib/enums'
 
 /* ── 日历本 / 任务本 ─────────────────────────────────────── */
 
@@ -229,7 +230,8 @@ export interface ReportArtifact {
 export interface HabitRoutine {
   id: string
   title: string
-  cadence: 'Daily' | 'Weekly' | 'Monthly' | 'Custom'
+  /** 后端按数字序列化，经 habitsApi.list 归一为字符串（见 lib/enums.ts） */
+  cadence: HabitCadence
   source: string
   status: string
 }

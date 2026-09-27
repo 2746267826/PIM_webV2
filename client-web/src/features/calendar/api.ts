@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPost, apiPut } from '@/api/client'
+import { normalizeHabitCadence } from '@/lib/enums'
 import type { PagedResult } from '@/api/types'
 import type {
   CalendarBook,
@@ -196,7 +197,11 @@ export const reportsApi = {
 /* ── 习惯 ─────────────────────────────────────────────────── */
 
 export const habitsApi = {
-  list: () => apiGet<import('./types').HabitRoutine[]>('/api/v1/calendar/habits'),
+  list: async () => {
+    const list = await apiGet<import('./types').HabitRoutine[]>('/api/v1/calendar/habits')
+    // 后端 HabitCadence 按数字序列化（Daily=0/Weekly=1/Monthly=2/Custom=3），归一为字符串
+    return list.map((h) => ({ ...h, cadence: normalizeHabitCadence(h.cadence) }))
+  },
   create: (body: { title: string; cadence?: string; ruleJson?: string }) =>
     apiPost<import('./types').HabitRoutine>('/api/v1/calendar/habits', body),
 }

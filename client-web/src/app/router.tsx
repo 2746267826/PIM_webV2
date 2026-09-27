@@ -1,5 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router'
-import { RequireAuth, RequireSetup } from './guards'
+import { RequireAdmin, RequireAuth, RequireSetup } from './guards'
 import { AppShell } from './shell/app-shell'
 import { LoginPage } from '@/features/auth/pages/login-page'
 import { SetupPage } from '@/features/server/pages/setup-page'
@@ -92,12 +92,18 @@ export const router = createBrowserRouter([
           { path: 'settings/microsoft', element: <MicrosoftPage /> },
           { path: 'settings/data-reliability', element: <DataReliabilityPage /> },
           { path: 'settings/sync', element: <Navigate to="/settings/microsoft?tab=outlook" replace /> },
-          { path: 'settings/ai', element: <AiSettingsPage /> },
+          {
+            // AI 网关与用户管理为 Admin 专属（ai/admin 组 Roles="admin"），提前拦截避免 403 噪音
+            element: <RequireAdmin />,
+            children: [
+              { path: 'settings/ai', element: <AiSettingsPage /> },
+              { path: 'settings/users', element: <AdminUsersPage /> },
+            ],
+          },
           { path: 'settings/mcp', element: <McpSettingsPage /> },
           { path: 'settings/calendar-data', element: <CalendarDataManagerPage /> },
           { path: 'settings/recycle-bin', element: <RecycleBinPage /> },
           { path: 'settings/pc-data', element: <PcDetailQueryPage /> },
-          { path: 'settings/users', element: <AdminUsersPage /> },
 
           // ── 其它 ──
           { path: 'app-knowledge-base', element: <AppKnowledgeBasePage /> },

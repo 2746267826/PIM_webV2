@@ -2,14 +2,15 @@ import { useState } from 'react'
 import { Plus, Repeat } from 'lucide-react'
 import { useCreateHabit, useHabits } from '../queries'
 import { notifySuccess } from '@/lib/notify'
+import { CADENCE_LABEL } from '@/lib/enums'
 import { Button, Card, CardTitle, EmptyState, Input, Label, PageHeader, Segmented, Select, StatusBadge } from '@/components/ui'
 
 type Tab = 'active' | 'planned' | 'archived'
 
 const CADENCE_OPTIONS = [
-  { value: 'Daily', label: '每日' },
-  { value: 'Weekly', label: '每周' },
-  { value: 'Monthly', label: '每月' },
+  { value: 'Daily', label: CADENCE_LABEL.Daily },
+  { value: 'Weekly', label: CADENCE_LABEL.Weekly },
+  { value: 'Monthly', label: CADENCE_LABEL.Monthly },
 ]
 
 /** 习惯页（02 §habits：执行中/规划/归档三标签 + 规则创建 + 只读规则卡） */
@@ -81,7 +82,7 @@ export function HabitsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium text-text-1">{h.title}</div>
                   <div className="text-xs text-text-3">
-                    {CADENCE_OPTIONS.find((c) => c.value === h.cadence)?.label ?? h.cadence} · 来源 {h.source}
+                    {CADENCE_LABEL[h.cadence] ?? h.cadence} · 来源 {h.source}
                   </div>
                 </div>
                 <StatusBadge tone={h.status === 'Active' ? 'ok' : 'neutral'} dot={false}>

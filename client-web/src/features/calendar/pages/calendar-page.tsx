@@ -16,7 +16,7 @@ import { EventEditorDialog } from '../components/event-editor-dialog'
 import { TaskEditorDialog } from '../components/task-editor-dialog'
 import { InboxPanel } from '../components/inbox-panel'
 import type { EventResponse, LayerItem } from '../types'
-import { dayEndIso, dayStartIso, durationToMinutes } from '@/lib/datetime'
+import { dayEndIso, dayStartIso, durationToMinutes, toUtcIso } from '@/lib/datetime'
 import { Chip, Button, Drawer, DrawerContent, PageHeader } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { notifyError, notifySuccess } from '@/lib/notify'
@@ -120,7 +120,10 @@ export function CalendarPage() {
   }
 
   function onDatesSet(arg: DatesSetArg) {
-    setRange({ start: arg.startStr, end: arg.endStr, title: arg.view.title })
+    // FullCalendar 的 startStr/endStr 带本地偏移（+08:00），后端 DateTime 解析会 500 → 归一到 UTC
+    const start = toUtcIso(arg.startStr) ?? dayStartIso(new Date())
+    const end = toUtcIso(arg.endStr) ?? dayEndIso(new Date())
+    setRange({ start, end, title: arg.view.title })
   }
 
   function onEventClick(arg: EventClickArg) {

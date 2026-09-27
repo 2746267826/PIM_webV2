@@ -196,7 +196,8 @@ export function EventEditorDialog({ open, onOpenChange, calendars, initial, even
       dtEnd,
       isAllDay: values.isAllDay,
       rrule: values.rrule || null,
-      descriptionFormat: 'text',
+      // 后端只接受 'html'（'text' 报 2009 DescriptionFormat 值无效）；纯文本描述可省略该字段
+      descriptionFormat: values.description ? 'html' : null,
       isReminderOn: values.isReminderOn,
       reminderMinutesBeforeStart: values.reminderMinutesBeforeStart ? Number(values.reminderMinutesBeforeStart) : null,
       showAs: values.showAs || null,
