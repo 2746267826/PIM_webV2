@@ -4,7 +4,6 @@ import {
   Download,
   ExternalLink,
   File as FileIcon,
-  FileText,
   FolderPlus,
   Grid2X2,
   Link2,
@@ -377,18 +376,20 @@ export function FilesPage() {
           )}
         </div>
 
-        {/* 右：预览面板 */}
-        <aside className="hidden w-[340px] shrink-0 xl:block">
-          {transferOpen || activeTransfers > 0 ? (
-            <TransferPanel onClose={() => setTransferOpen(false)} />
-          ) : previewItem ? (
-            <FilePreview item={previewItem} onClose={() => setPreviewItem(null)} />
-          ) : (
-            <Card className="grid h-full place-items-center p-4">
-              <EmptyState size="sm" icon={FileText} title="选择文件以预览" description="支持图片、文本编辑与 Office 在线预览。" />
-            </Card>
-          )}
-        </aside>
+        {/*
+          右：预览/传输面板。
+          仅在有选中文件或传输任务时占位，否则整列收起、中间栏自动占满宽度
+          （此前恒定显示「选择文件以预览」空态，白白吃掉 340px）。
+        */}
+        {(previewItem != null || transferOpen || activeTransfers > 0) && (
+          <aside className="hidden w-[340px] shrink-0 xl:block">
+            {transferOpen || activeTransfers > 0 ? (
+              <TransferPanel onClose={() => setTransferOpen(false)} />
+            ) : (
+              <FilePreview item={previewItem!} onClose={() => setPreviewItem(null)} />
+            )}
+          </aside>
+        )}
       </div>
 
       {/* 窄屏抽屉：目录树 */}

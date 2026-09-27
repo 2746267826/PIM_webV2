@@ -6,8 +6,8 @@ export const pcKeys = {
   summary: (date: string) => ['pc', 'summary', date] as const,
   heatmap: (start: string, end: string, dim: string) => ['pc', 'heatmap', start, end, dim] as const,
   activity: (date: string) => ['pc', 'activity-analysis', date] as const,
-  appUsage: (date: string) => ['pc', 'app-usage', date] as const,
-  categories: (date: string) => ['pc', 'categories', date] as const,
+  appUsage: (key: string) => ['pc', 'app-usage', key] as const,
+  categories: (key: string) => ['pc', 'categories', key] as const,
   productivity: (date: string) => ['pc', 'productivity', date] as const,
   queue: (limit: number) => ['pc', 'labeling-queue', limit] as const,
   dictionary: ['pc', 'category-dictionary'] as const,
@@ -17,10 +17,26 @@ export const pcKeys = {
   browserTimeline: (date: string) => ['pc', 'browser', 'timeline', date] as const,
 }
 
-export function usePcSummary(date: string, force = false) {
+/*
+ * 聚合类接口（app-usage / category-distribution / focus-blocks / late-night）
+ * 同时支持 date 单日与 start&end 范围两种模式（见 05/pc-tracker.md），
+ * 故统一用 Scope 表达，缓存键取 "date" 或 "start~end"。
+ */
+export interface PcScope {
+  date?: string
+  start?: string
+  end?: string
+}
+
+export function scopeKey(scope: PcScope): string {
+  return scope.start && scope.end ? `${scope.start}~${scope.end}` : (scope.date ?? '')
+}
+
+export function usePcSummary(date: string, force = false, enabled = true) {
   return useQuery({
     queryKey: [...pcKeys.summary(date), force],
     queryFn: () => pcApi.summary(date, force),
+    enabled,
     refetchInterval: () => deferredIntervalMs(),
   })
 }
@@ -42,36 +58,40 @@ export function useActivityAnalysis(date: string, enabled = true, force = false)
   })
 }
 
-export function useAppUsage(date: string, enabled = true) {
+export function useAppUsage(scope: PcScope, enabled = true) {
+  const key = scopeKey(scope)
   return useQuery({
-    queryKey: pcKeys.appUsage(date),
-    queryFn: () => pcApi.appUsage({ date, timezone: 'Asia/Shanghai', limit: 8 }),
+    queryKey: pcKeys.appUsage(key),
+    queryFn: () => pcApi.appUsage({ ...scope, timezone: 'Asia/Shanghai', limit: 8 }),
     enabled,
   })
 }
 
-export function useCategoryDistribution(date: string, enabled = true) {
+export function useCategoryDistribution(scope: PcScope, enabled = true) {
+  const key = scopeKey(scope)
   return useQuery({
-    queryKey: pcKeys.categories(date),
-    queryFn: () => pcApi.categoryDistribution({ date, timezone: 'Asia/Shanghai' }),
+    queryKey: pcKeys.categories(key),
+    queryFn: () => pcApi.categoryDistribution({ ...scope, timezone: 'Asia/Shanghai' }),
     enabled,
   })
 }
 
-/** 专注块（今日页/总览页用） */
-export function useFocusBlocks(date: string, enabled = true) {
+/** 专注块（今日页/总览页用；支持单日与范围） */
+export function useFocusBlocks(scope: PcScope, enabled = true) {
+  const key = scopeKey(scope)
   return useQuery({
-    queryKey: ['pc', 'focus-blocks', date],
-    queryFn: () => pcApi.focusBlocks({ date, timezone: 'Asia/Shanghai' }),
+    queryKey: ['pc', 'focus-blocks', key],
+    queryFn: () => pcApi.focusBlocks({ ...scope, timezone: 'Asia/Shanghai' }),
     enabled,
   })
 }
 
-/** 深夜使用（总览页用） */
-export function useLateNight(date: string, enabled = true) {
+/** 深夜使用（总览页用；支持单日与范围） */
+export function useLateNight(scope: PcScope, enabled = true) {
+  const key = scopeKey(scope)
   return useQuery({
-    queryKey: ['pc', 'late-night', date],
-    queryFn: () => pcApi.lateNight({ date, timezone: 'Asia/Shanghai' }),
+    queryKey: ['pc', 'late-night', key],
+    queryFn: () => pcApi.lateNight({ ...scope, timezone: 'Asia/Shanghai' }),
     enabled,
   })
 }

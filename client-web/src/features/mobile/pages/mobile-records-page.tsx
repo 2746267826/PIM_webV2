@@ -13,19 +13,24 @@ import { mobileApi } from '../api'
 import { todayBusinessDay, businessDayShift, businessDayRange } from '@/lib/businessDay'
 import { LIFE_CATEGORY_COLOR } from '@/lib/enums'
 import { formatDuration, formatTime } from '@/lib/datetime'
-import { EChartsBox, resolveCssColors } from '@/components/viz/echarts-box'
-import { Button, Card, CardTitle, Chip, EmptyState, MetricCard, PageHeader, Segmented, Skeleton, StatusBadge } from '@/components/ui'
+import { EChartsBox, asTooltipItem, chartTooltip, resolveCssColors } from '@/components/viz/echarts-box'
+import { GitHubHeatmap, HEAT_RAMP_GREEN } from '@/components/viz/github-heatmap'
+import { Button, Card, CardTitle, Chip, EmptyState, Input, MetricCard, PageHeader, Segmented, Skeleton, StatusBadge } from '@/components/ui'
 import { cn } from '@/lib/utils'
 
-function useRangeParams(days: number): Record<string, string> {
+/**
+ * 时间范围：预设天数或自定义起止（业务日口径，转 UTC 窗口参数）。
+ * custom 为 null 时按 days 计算；否则用自定义的 start/end 业务日。
+ */
+function useRangeParams(days: number, custom: { start: string; end: string } | null): Record<string, string> {
   return useMemo(() => {
-    const end = todayBusinessDay()
-    const start = businessDayShift(end, -(days - 1))
+    const end = custom?.end ?? todayBusinessDay()
+    const start = custom?.start ?? businessDayShift(end, -(days - 1))
     return {
       rangeStartUtc: businessDayRange(start).startUtc,
       rangeEndUtc: businessDayRange(end).endUtc,
     }
-  }, [days])
+  }, [days, custom])
 }
 
 type View = 'usage' | 'liveness'
@@ -43,12 +48,70 @@ const RANGE_OPTIONS: { value: RangeKey; label: string }[] = [
   { value: 30, label: '30 天' },
 ]
 
+/** 时间范围选择条：预设天数 + 自定义起止（自定义优先） */
+function RangePicker({
+  days,
+  setDays,
+  custom,
+  setCustom,
+  onAfterChange,
+}: {
+  days: RangeKey
+  setDays: (d: RangeKey) => void
+  custom: { start: string; end: string } | null
+  setCustom: (c: { start: string; end: string } | null) => void
+  onAfterChange?: () => void
+}) {
+  const today = todayBusinessDay()
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {RANGE_OPTIONS.map((r) => (
+        <Chip key={r.value} active={custom == null && days === r.value} onClick={() => { setDays(r.value); onAfterChange?.() }}>
+          {r.label}
+        </Chip>
+      ))}
+      <span className="mx-1 text-text-4">|</span>
+      <Input
+        type="date"
+        aria-label="起始业务日"
+        className="h-7 w-[138px] text-[13px]"
+        value={custom?.start ?? businessDayShift(today, -(days - 1))}
+        max={custom?.end ?? today}
+        onChange={(e) => {
+          if (!e.target.value) return
+          setCustom({ start: e.target.value, end: custom?.end ?? today })
+          onAfterChange?.()
+        }}
+      />
+      <span className="text-text-3">→</span>
+      <Input
+        type="date"
+        aria-label="结束业务日"
+        className="h-7 w-[138px] text-[13px]"
+        value={custom?.end ?? today}
+        min={custom?.start ?? businessDayShift(today, -(days - 1))}
+        max={today}
+        onChange={(e) => {
+          if (!e.target.value) return
+          setCustom({ start: custom?.start ?? businessDayShift(today, -(days - 1)), end: e.target.value })
+          onAfterChange?.()
+        }}
+      />
+      {custom != null && (
+        <Chip onClick={() => { setCustom(null); onAfterChange?.() }}>清除自定义</Chip>
+      )}
+    </div>
+  )
+}
+
 /** 手机记录（02 §mobile-records：使用记录 / 设备存活双子视图，?view=liveness） */
 export function MobileRecordsPage() {
   const [params, setParams] = useSearchParams()
   const view: View = params.get('view') === 'liveness' ? 'liveness' : 'usage'
   const [days, setDays] = useState<RangeKey>(7)
-  const range = useRangeParams(days)
+  /* 自定义范围：设置后优先于预设天数（null = 用预设） */
+  const [custom, setCustom] = useState<{ start: string; end: string } | null>(null)
+  const range = useRangeParams(days, custom)
 
   function setView(v: View) {
     setParams(v === 'liveness' ? { view: 'liveness' } : {})
@@ -65,14 +128,36 @@ export function MobileRecordsPage() {
         ]} />}
       />
 
-      {view === 'usage' ? <UsageView days={days} setDays={setDays} range={range} /> : <LivenessView />}
+      {view === 'usage' ? (
+        <UsageView
+          days={days}
+          setDays={(d) => { setDays(d); setCustom(null) }}
+          custom={custom}
+          setCustom={setCustom}
+          range={range}
+        />
+      ) : (
+        <LivenessView custom={custom} setCustom={setCustom} range={range} days={days} setDays={(d) => { setDays(d); setCustom(null) }} />
+      )}
     </div>
   )
 }
 
 /* ── 使用记录 ─────────────────────────────────────────────── */
 
-function UsageView({ days, setDays, range }: { days: RangeKey; setDays: (d: RangeKey) => void; range: Record<string, string> }) {
+function UsageView({
+  days,
+  setDays,
+  custom,
+  setCustom,
+  range,
+}: {
+  days: RangeKey
+  setDays: (d: RangeKey) => void
+  custom: { start: string; end: string } | null
+  setCustom: (c: { start: string; end: string } | null) => void
+  range: Record<string, string>
+}) {
   const qc = useQueryClient()
   const [force, setForce] = useState(false)
   const [page, setPage] = useState(1)
@@ -95,23 +180,20 @@ function UsageView({ days, setDays, range }: { days: RangeKey; setDays: (d: Rang
     setRefreshing(false)
   }
 
-  /* 热力图（ECharts heatmap：x=本地小时，y=本地日） */
-  const heatOption = useMemo(() => {
+  /*
+   * 热力图：GitHub 贡献图风格（按天聚合的方块日历）。
+   * 原实现是「小时 × 日」矩阵，格数随时长线性增长且观感差；
+   * 现按天求和展示，小时级分布交由下方服务端小时分布图承担。
+   */
+  const heatDays = useMemo(() => {
     const buckets = heatmap.data ?? []
-    const dates = [...new Set(buckets.map((b) => b.localDate))].sort()
-    const data: [number, number, number][] = buckets.map((b) => [
-      b.localHour,
-      dates.indexOf(b.localDate),
-      Math.round(b.foregroundSeconds / 60),
-    ])
-    return {
-      tooltip: { formatter: (p: { value: [number, number, number] }) => `${dates[p.value[1]]} ${p.value[0]}时 · ${p.value[2]} 分钟` },
-      grid: { left: 70, right: 10, top: 4, bottom: 22 },
-      xAxis: { type: 'category', data: Array.from({ length: 24 }, (_, i) => `${i}`), axisLabel: { fontSize: 9, color: '#94A3B8' } },
-      yAxis: { type: 'category', data: dates.map((d) => d.slice(5)), axisLabel: { fontSize: 10, color: '#64748B' } },
-      visualMap: { min: 0, max: Math.max(10, ...data.map((d) => d[2])), show: false, inRange: { color: ['#F1F5F9', '#DBEAFE', '#93C5FD', '#3B82F6', '#1D4ED8'] } },
-      series: [{ type: 'heatmap', data, itemStyle: { borderRadius: 3, borderColor: '#fff', borderWidth: 1 } }],
+    const byDate = new Map<string, number>()
+    for (const b of buckets) {
+      byDate.set(b.localDate, (byDate.get(b.localDate) ?? 0) + b.foregroundSeconds / 60)
     }
+    return [...byDate.entries()]
+      .map(([date, v]) => ({ date, value: Math.round(v) }))
+      .sort((a, b) => a.date.localeCompare(b.date))
   }, [heatmap.data])
 
   /* 图表网格（服务端 8 张预设，按 chartType 分发） */
@@ -121,11 +203,15 @@ function UsageView({ days, setDays, range }: { days: RangeKey; setDays: (d: Rang
 
   return (
     <div className="space-y-5">
-      {/* 筛选行 */}
+      {/* 筛选行：预设天数 + 自定义范围 */}
       <div className="flex flex-wrap items-center gap-2">
-        {RANGE_OPTIONS.map((r) => (
-          <Chip key={r.value} active={days === r.value} onClick={() => { setDays(r.value); setPage(1) }}>{r.label}</Chip>
-        ))}
+        <RangePicker
+          days={days}
+          setDays={setDays}
+          custom={custom}
+          setCustom={setCustom}
+          onAfterChange={() => setPage(1)}
+        />
         <Chip onClick={() => void forceRefresh()}>
           <RefreshCw className={cn('mr-1 inline size-3', refreshing && 'animate-spin')} aria-hidden /> 强制刷新
         </Chip>
@@ -148,14 +234,17 @@ function UsageView({ days, setDays, range }: { days: RangeKey; setDays: (d: Rang
         </div>
       )}
 
-      {/* 热力图 */}
+      {/* 热力图（GitHub 贡献图风格，按天汇总） */}
       <Card className="p-4">
-        <CardTitle>使用热力图（本地日 × 小时）</CardTitle>
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle>使用热力图</CardTitle>
+          <span className="text-xs text-text-4">按天汇总的前台使用分钟数</span>
+        </div>
         <div className="mt-3">
-          {(heatmap.data?.length ?? 0) === 0 ? (
+          {heatDays.length === 0 ? (
             <EmptyState size="sm" title="暂无使用数据" />
           ) : (
-            <EChartsBox option={heatOption} height={200} />
+            <GitHubHeatmap days={heatDays} ramp={HEAT_RAMP_GREEN} unit="分钟" />
           )}
         </div>
       </Card>
@@ -314,11 +403,19 @@ function SessionEvents({ sessionId }: { sessionId: string }) {
 }
 
 /** 服务端图表 DTO → ECharts option */
-function chartToOption(c: { chartType: string; points: { label: string; value: number; lifeCategory?: string | null }[] }) {
+/** 服务端预设图表 → ECharts option（统一带 tooltip） */
+function chartToOption(c: { chartType: string; unit?: string; points: { label: string; value: number; lifeCategory?: string | null }[] }) {
+  const unit = c.unit ?? ''
   if (c.chartType === 'pie' || c.chartType === 'category-share') {
     const hasCategories = c.points.some((p) => p.lifeCategory)
     return {
-      tooltip: {},
+      tooltip: chartTooltip({
+        trigger: 'item',
+        formatter: (p) => {
+          const it = asTooltipItem(p)
+          return `${it.name}<br/><b>${Math.round(Number(it.value))}</b>${unit} · ${it.percent ?? 0}%`
+        },
+      }),
       legend: { bottom: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 10, color: '#64748B' } },
       series: [{
         type: 'pie',
@@ -339,17 +436,31 @@ function chartToOption(c: { chartType: string; points: { label: string; value: n
   }
   if (c.chartType === 'daily-total' || c.chartType === 'category-trend' || c.chartType === 'switch-trend') {
     return {
-      tooltip: { trigger: 'axis' },
-      grid: { left: 44, right: 10, top: 10, bottom: 24 },
+      tooltip: chartTooltip({
+        trigger: 'axis',
+        formatter: (p) => {
+          const it = asTooltipItem(p)
+          return `${it.axisValueLabel ?? it.name}<br/>${Math.round(Number(it.value) * 100) / 100}${unit}`
+        },
+      }),
+      grid: { left: 46, right: 12, top: 10, bottom: 24 },
       xAxis: { type: 'category', data: c.points.map((p) => p.label.slice(5)), axisLabel: { fontSize: 10, color: '#94A3B8' } },
-      yAxis: { type: 'value', axisLabel: { fontSize: 10, color: '#94A3B8' } },
+      yAxis: { type: 'value', axisLabel: { fontSize: 10, color: '#94A3B8' }, name: unit, nameTextStyle: { fontSize: 9, color: '#94A3B8' } },
       series: [{ type: 'line', smooth: true, symbolSize: 5, itemStyle: { color: '#2563EB' }, areaStyle: { color: 'rgba(37,99,235,.08)' }, data: c.points.map((p) => Math.round(p.value * 100) / 100) }],
     }
   }
   // bar 类（top-apps / hour-distribution 等）
   const items = c.points.slice(0, 10).slice().reverse()
   return {
-    grid: { left: 90, right: 16, top: 6, bottom: 20 },
+    tooltip: chartTooltip({
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (p) => {
+        const it = asTooltipItem(p)
+        return `${it.name}<br/><b>${Math.round(Number(it.value) * 100) / 100}</b>${unit}`
+      },
+    }),
+    grid: { left: 96, right: 24, top: 6, bottom: 20 },
     xAxis: { type: 'value', axisLabel: { fontSize: 10, color: '#94A3B8' } },
     yAxis: { type: 'category', data: items.map((p) => p.label), axisLabel: { fontSize: 11, color: '#64748B' } },
     series: [{ type: 'bar', barWidth: 12, itemStyle: { color: '#3B82F6', borderRadius: [0, 3, 3, 0] }, data: items.map((p) => Math.round(p.value * 100) / 100) }],
@@ -358,10 +469,20 @@ function chartToOption(c: { chartType: string; points: { label: string; value: n
 
 /* ── 设备存活 ─────────────────────────────────────────────── */
 
-function LivenessView() {
-  const [rangeDays, setRangeDays] = useState(7)
-  const params = useRangeParams(rangeDays)
-  const { data, isLoading } = useLiveness(params, true)
+function LivenessView({
+  days,
+  setDays,
+  custom,
+  setCustom,
+  range,
+}: {
+  days: RangeKey
+  setDays: (d: RangeKey) => void
+  custom: { start: string; end: string } | null
+  setCustom: (c: { start: string; end: string } | null) => void
+  range: Record<string, string>
+}) {
+  const { data, isLoading } = useLiveness(range, true)
 
   const groups = [
     { label: '手机', items: data?.phones ?? [] },
@@ -371,11 +492,7 @@ function LivenessView() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        {([7, 30] as const).map((d) => (
-          <Chip key={d} active={rangeDays === d} onClick={() => setRangeDays(d)}>近 {d} 天</Chip>
-        ))}
-      </div>
+      <RangePicker days={days} setDays={setDays} custom={custom} setCustom={setCustom} />
 
       {isLoading ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-36" />)}</div>

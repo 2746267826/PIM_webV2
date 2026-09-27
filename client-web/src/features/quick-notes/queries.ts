@@ -24,8 +24,10 @@ export function useQuickNoteMutations() {
   const invalidate = useInvalidateNotes()
   return {
     save: useMutation({
-      mutationFn: async (input: { id?: string; contentMarkdown: string; attachmentIds?: string[] }) =>
-        input.id ? quickNotesApi.update(input.id, input) : quickNotesApi.create(input),
+      mutationFn: async (input: { id?: string; contentMarkdown: string; attachmentIds?: string[]; source?: string }) =>
+        input.id
+          ? quickNotesApi.update(input.id, { contentMarkdown: input.contentMarkdown, attachmentIds: input.attachmentIds })
+          : quickNotesApi.create({ contentMarkdown: input.contentMarkdown, attachmentIds: input.attachmentIds, source: input.source }),
       onSuccess: invalidate,
     }),
     process: useMutation({ mutationFn: quickNotesApi.process, onSuccess: invalidate }),

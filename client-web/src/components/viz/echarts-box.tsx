@@ -48,6 +48,77 @@ export function themedOption(option: EChartsCoreOption): EChartsCoreOption {
   }
 }
 
+/*
+ * 统一 tooltip 外观：ECharts 默认的白色圆角框在本项目的浅色紧凑风格里偏突兀。
+ * 所有图表一律通过 chartTooltip() 生成 tooltip 配置，保证悬浮提示的样式与行为一致。
+ */
+export const TOOLTIP_BOX_STYLE = {
+  backgroundColor: 'rgba(15, 23, 42, 0.92)',
+  borderWidth: 0,
+  padding: [6, 10] as [number, number],
+  textStyle: { color: '#F8FAFC', fontSize: 12, lineHeight: 18 },
+  extraCssText: 'border-radius:8px;box-shadow:0 6px 20px rgba(15,23,42,.24);backdrop-filter:blur(2px);',
+}
+
+export interface TooltipLike {
+  name?: string
+  seriesName?: string
+  value?: unknown
+  percent?: number
+  marker?: string
+  axisValueLabel?: string
+  axisValue?: string | number
+  dataIndex?: number
+  color?: string
+}
+
+/** tooltipBoxStyle 别名（供需要直接展开的调用点使用） */
+export const tooltipBoxStyle = TOOLTIP_BOX_STYLE
+
+/**
+ * 生成统一风格的 tooltip 配置。
+ * formatter 收到 ECharts 的原始 params（item 触发为单个、axis 触发为数组），
+ * 可用 isTooltipList(params) 收窄类型后取数组。
+ */
+export function chartTooltip(opts: {
+  trigger?: 'item' | 'axis' | 'none'
+  axisPointer?: Record<string, unknown>
+  formatter?: (params: TooltipLike | TooltipLike[]) => string
+  /** axis 触发时是否按值倒序（默认 true） */
+  orderByValue?: boolean
+} = {}): Record<string, unknown> {
+  const { trigger = 'item', axisPointer, formatter, orderByValue = true } = opts
+  return {
+    trigger,
+    confine: true,
+    appendToBody: true,
+    ...TOOLTIP_BOX_STYLE,
+    ...(axisPointer ? { axisPointer } : {}),
+    ...(trigger === 'axis' ? { order: orderByValue ? ('valueDesc' as const) : undefined } : {}),
+    ...(formatter
+      ? {
+          formatter: (params: TooltipLike | TooltipLike[]) => {
+            try {
+              return formatter(params)
+            } catch {
+              return ''
+            }
+          },
+        }
+      : {}),
+  }
+}
+
+/** 收窄：axis 触发的 params 是数组 */
+export function isTooltipList(p: TooltipLike | TooltipLike[]): p is TooltipLike[] {
+  return Array.isArray(p)
+}
+
+/** 收窄：item 触发的 params 是单点 */
+export function asTooltipItem(p: TooltipLike | TooltipLike[]): TooltipLike {
+  return Array.isArray(p) ? (p[0] ?? {}) : p
+}
+
 export interface EChartsBoxProps {
   option: EChartsCoreOption
   height?: number

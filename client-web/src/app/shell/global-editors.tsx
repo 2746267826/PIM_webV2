@@ -1,13 +1,11 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { quickNotesApi } from '@/features/quick-notes/api'
-import { QuickNoteDialog } from '@/features/quick-notes/components/quick-note-dialog'
+import { QuickNoteDialog, type QuickNoteDialogTarget } from '@/features/quick-notes/components/quick-note-dialog'
 import { TaskEditorDialog } from '@/features/calendar/components/task-editor-dialog'
 import { EventEditorDialog } from '@/features/calendar/components/event-editor-dialog'
 import { useCalendars, useTaskBooks } from '@/features/calendar/queries'
 import type { QuickNoteDetail } from '@/features/quick-notes/types'
 import type { EventResponse, TaskResponse } from '@/features/calendar/types'
-import { notifyError } from '@/lib/notify'
 
 /*
  * 全局编辑器启动器（01 §5 FAB）：
@@ -16,8 +14,8 @@ import { notifyError } from '@/lib/notify'
  */
 
 interface GlobalEditorsValue {
-  /** 新建闪念（先创建草稿记录再打开编辑器） */
-  openNewQuickNote: (prefill?: string) => Promise<void>
+  /** 新建闪念：打开空白草稿（保存时才在后端创建，空内容关闭不留记录） */
+  openNewQuickNote: (prefill?: string) => void
   /** 打开已有闪念 */
   openQuickNote: (note: QuickNoteDetail) => void
   /** 新建/编辑任务 */
@@ -32,31 +30,21 @@ export function GlobalEditorsProvider({ children }: { children: ReactNode }) {
   const { data: calendars = [] } = useCalendars()
   const { data: taskBooks = [] } = useTaskBooks()
 
-  const [note, setNote] = useState<QuickNoteDetail | null>(null)
+  const [noteTarget, setNoteTarget] = useState<QuickNoteDialogTarget | null>(null)
   const [taskOpen, setTaskOpen] = useState(false)
   const [task, setTask] = useState<TaskResponse | null>(null)
   const [eventState, setEventState] = useState<
     { open: false } | { open: true; event: EventResponse | null; initial: { start: Date; end: Date } | null }
   >({ open: false })
-  const creating = useRef(false)
 
-  const openNewQuickNote = useCallback(async (prefill?: string) => {
-    if (creating.current) return
-    creating.current = true
-    try {
-      const created = await quickNotesApi.create({ contentMarkdown: prefill ?? '', source: 'web-floating' })
-      setNote(created)
-    } catch (err) {
-      notifyError(err instanceof Error ? err.message : '无法新建闪念')
-    } finally {
-      creating.current = false
-    }
+  const openNewQuickNote = useCallback((prefill?: string) => {
+    setNoteTarget({ mode: 'draft', initialMarkdown: prefill ?? '', source: 'web-floating' })
   }, [])
 
   const value = useMemo<GlobalEditorsValue>(
     () => ({
       openNewQuickNote,
-      openQuickNote: (n) => setNote(n),
+      openQuickNote: (n) => setNoteTarget({ mode: 'edit', note: n }),
       openTask: (t) => {
         setTask(t ?? null)
         setTaskOpen(true)
@@ -70,7 +58,7 @@ export function GlobalEditorsProvider({ children }: { children: ReactNode }) {
     <GlobalEditorsContext.Provider value={value}>
       {children}
 
-      {note && <QuickNoteDialog note={note} onClose={() => setNote(null)} />}
+      <QuickNoteDialog target={noteTarget} onClose={() => setNoteTarget(null)} />
 
       <TaskEditorDialog open={taskOpen} onOpenChange={setTaskOpen} taskBooks={taskBooks} task={task} />
 

@@ -3,8 +3,8 @@ import { useSearchParams } from 'react-router'
 import { Paperclip, Plus } from 'lucide-react'
 import { useQuickNotes } from '../queries'
 import { quickNotesApi } from '../api'
-import { QuickNoteDialog } from '../components/quick-note-dialog'
-import { NOTE_CATEGORIES, noteCategory, type QuickNoteDetail, type QuickNoteListItem } from '../types'
+import { QuickNoteDialog, type QuickNoteDialogTarget } from '../components/quick-note-dialog'
+import { NOTE_CATEGORIES, noteCategory, type QuickNoteListItem } from '../types'
 import { Button, Card, Chip, EmptyState, Input, PageHeader, Skeleton, StatusBadge } from '@/components/ui'
 import { formatTime } from '@/lib/datetime'
 
@@ -27,36 +27,39 @@ export function QuickNotesPage() {
   const [status, setStatus] = useState('all')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<string>('全部')
-  const [editing, setEditing] = useState<QuickNoteDetail | null>(null)
+  const [target, setTarget] = useState<QuickNoteDialogTarget | null>(null)
+  const [opening, setOpening] = useState(false)
 
   const { data, isLoading } = useQuickNotes({ status, search })
   const prefill = params.get('prefill') ?? params.get('text')
 
-  /* Shell 分享预填：?prefill= 打开新闪念并预填 */
+  /* Shell 分享预填：?prefill= 打开草稿并预填（不预先建记录） */
   useEffect(() => {
-    if (prefill != null && editing == null) {
-      void (async () => {
-        const created = await quickNotesApi.create({ contentMarkdown: prefill, source: 'web-page' })
-        setEditing(created)
-        setParams({}, { replace: true })
-      })()
+    if (prefill != null && target == null) {
+      setTarget({ mode: 'draft', initialMarkdown: prefill, source: 'web-page' })
+      setParams({}, { replace: true })
     }
-  }, [prefill, editing, setParams])
+  }, [prefill, target, setParams])
 
   const items = useMemo(() => {
-    const list = data?.items ?? []
+    // 历史遗留：早期版本「打开即建记录」留下过空闪念；列表不展示无内容且无附件的记录
+    const list = (data?.items ?? []).filter((n) => n.contentPreview.trim().length > 0 || (n.attachmentCount ?? 0) > 0)
     if (category === '全部') return list
     return list.filter((n) => noteCategory(n.contentPreview) === category)
   }, [data, category])
 
-  async function createNote() {
-    const created = await quickNotesApi.create({ contentMarkdown: '' })
-    setEditing(created)
+  function createNote() {
+    setTarget({ mode: 'draft', initialMarkdown: '', source: 'web-page' })
   }
 
   async function openNote(item: QuickNoteListItem) {
-    const detail = await quickNotesApi.get(item.id)
-    setEditing(detail)
+    setOpening(true)
+    try {
+      const detail = await quickNotesApi.get(item.id)
+      setTarget({ mode: 'edit', note: detail })
+    } finally {
+      setOpening(false)
+    }
   }
 
   return (
@@ -116,7 +119,8 @@ export function QuickNotesPage() {
                 key={n.id}
                 type="button"
                 onClick={() => void openNote(n)}
-                className="mb-3 block w-full break-inside-avoid rounded-card border border-border bg-bg p-4 text-left shadow-card transition-colors outline-none hover:border-border-strong"
+                disabled={opening}
+                className="mb-3 block w-full break-inside-avoid rounded-card border border-border bg-bg p-4 text-left shadow-card transition-colors outline-none hover:border-border-strong disabled:opacity-70"
               >
                 <div className="flex items-center gap-1.5">
                   {cat && <Chip active className="h-5 cursor-default px-2 text-[11px]">{cat}</Chip>}
@@ -139,7 +143,7 @@ export function QuickNotesPage() {
         </div>
       )}
 
-      <QuickNoteDialog note={editing} onClose={() => setEditing(null)} />
+      <QuickNoteDialog target={target} onClose={() => setTarget(null)} />
     </div>
   )
 }

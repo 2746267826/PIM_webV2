@@ -9,8 +9,18 @@ import { STORAGE_KEYS, getJSON, setJSON } from '@/lib/storage'
 import { cn } from '@/lib/utils'
 import { ConfirmDialog, Button, Select } from '@/components/ui'
 
+/**
+ * 弹窗目标：
+ * - edit：已有记录（PUT 保存）
+ * - draft：尚未在后端创建的新闪念，保存时才 POST —— 避免「打开即建记录」导致
+ *   用户什么都没写就关掉时留下空记录（此前因此堆积了多条空闪念）。
+ */
+export type QuickNoteDialogTarget =
+  | { mode: 'edit'; note: QuickNoteDetail }
+  | { mode: 'draft'; initialMarkdown: string; source: string }
+
 export interface QuickNoteDialogProps {
-  note: QuickNoteDetail | null
+  target: QuickNoteDialogTarget | null
   onClose: () => void
 }
 
@@ -24,12 +34,15 @@ const CATEGORIES = [
 ]
 
 /** 闪念编辑弹窗（规格：可拖拽、位置记忆 localStorage、TipTap、附件、状态操作） */
-export function QuickNoteDialog({ note, onClose }: QuickNoteDialogProps) {
+export function QuickNoteDialog({ target, onClose }: QuickNoteDialogProps) {
   const mutations = useQuickNoteMutations()
+  const isDraft = target?.mode === 'draft'
+  const note = target?.mode === 'edit' ? target.note : null
   const [markdown, setMarkdown] = useState('')
   const [category, setCategory] = useState('')
   const [attachments, setAttachments] = useState<QuickNoteAttachment[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [saving, setSaving] = useState(false)
   const dragRef = useRef<HTMLDivElement>(null)
 
   /* 弹窗位置记忆 */
@@ -50,19 +63,55 @@ export function QuickNoteDialog({ note, onClose }: QuickNoteDialogProps) {
     }
   })
 
+  /* 载入内容：编辑态取记录；草稿态取预填文本（无后端记录） */
   useEffect(() => {
-    if (note) {
-      setMarkdown(note.contentMarkdown)
-      setAttachments(note.attachments ?? [])
-      setCategory('')
+    if (!target) return
+    if (target.mode === 'edit') {
+      setMarkdown(target.note.contentMarkdown)
+      setAttachments(target.note.attachments ?? [])
+    } else {
+      setMarkdown(target.initialMarkdown)
+      setAttachments([])
     }
-  }, [note])
+    setCategory('')
+    setConfirmDelete(false)
+  }, [target])
 
-  if (!note) return null
+  if (!target) return null
 
+  /*
+   * 保存：
+   * - 编辑态 → PUT
+   * - 草稿态 → POST（仅当有内容或附件时才创建；空内容直接关闭，不产生记录）
+   */
   async function save() {
+    if (!target) return
     const attachmentIds = attachments.map((a) => a.id)
-    await mutations.save.mutateAsync({ id: note!.id, contentMarkdown: markdown, attachmentIds })
+    const hasContent = markdown.trim().length > 0 || attachmentIds.length > 0
+    if (target.mode === 'draft' && !hasContent) {
+      onClose()
+      return
+    }
+    setSaving(true)
+    try {
+      await mutations.save.mutateAsync({
+        id: target.mode === 'edit' ? target.note.id : undefined,
+        contentMarkdown: markdown,
+        attachmentIds,
+        ...(target.mode === 'draft' ? { source: target.source } : {}),
+      })
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /** 关闭：草稿态若有内容则自动保存，无内容直接丢弃（不建记录） */
+  async function close() {
+    if (target?.mode === 'draft' && (markdown.trim().length > 0 || attachments.length > 0)) {
+      await save()
+      return
+    }
     onClose()
   }
 
@@ -91,12 +140,14 @@ export function QuickNoteDialog({ note, onClose }: QuickNoteDialogProps) {
   }
 
   const statusActions: { label: string; icon: typeof Save; run: () => Promise<unknown>; tone?: 'danger' }[] =
-    note.status === 'archived'
-      ? [{ label: '恢复到收集箱', icon: RotateCcw, run: () => mutations.restore.mutateAsync(note.id) }]
-      : [
-          { label: '标记已处理', icon: CheckCircle2, run: () => mutations.process.mutateAsync(note.id) },
-          { label: '归档', icon: Archive, run: () => mutations.archive.mutateAsync(note.id) },
-        ]
+    note == null
+      ? []
+      : note.status === 'archived'
+        ? [{ label: '恢复到收集箱', icon: RotateCcw, run: () => mutations.restore.mutateAsync(note.id) }]
+        : [
+            { label: '标记已处理', icon: CheckCircle2, run: () => mutations.process.mutateAsync(note.id) },
+            { label: '归档', icon: Archive, run: () => mutations.archive.mutateAsync(note.id) },
+          ]
 
   return (
     <>
@@ -116,9 +167,11 @@ export function QuickNoteDialog({ note, onClose }: QuickNoteDialogProps) {
         {/* 可拖拽标题栏 */}
         <div ref={dragRef} onMouseDown={startDrag} className="flex cursor-grab items-center gap-2 border-b border-divider px-3 py-2 active:cursor-grabbing">
           <GripHorizontal className="size-4 text-text-4" aria-hidden />
-          <span className="text-[13px] font-semibold text-text-1">编辑闪念</span>
-          <span className="rounded-badge bg-surface-2 px-1.5 py-0.5 text-[11px] text-text-3">{note.status}</span>
-          <button type="button" aria-label="关闭" onClick={onClose} className="ml-auto rounded-ctl p-1 text-text-3 hover:bg-surface hover:text-text-1 outline-none">
+          <span className="text-[13px] font-semibold text-text-1">{isDraft ? '新建闪念' : '编辑闪念'}</span>
+          <span className="rounded-badge bg-surface-2 px-1.5 py-0.5 text-[11px] text-text-3">
+            {isDraft ? '未保存' : (note?.status ?? '')}
+          </span>
+          <button type="button" aria-label="关闭" onClick={() => void close()} className="ml-auto rounded-ctl p-1 text-text-3 hover:bg-surface hover:text-text-1 outline-none">
             <X className="size-4" aria-hidden />
           </button>
         </div>
@@ -183,24 +236,26 @@ export function QuickNoteDialog({ note, onClose }: QuickNoteDialogProps) {
           </div>
         </div>
 
-        {/* 底部操作 */}
+        {/* 底部操作（草稿态无删除/状态操作：记录尚未创建） */}
         <div className="flex shrink-0 items-center gap-2 border-t border-divider px-4 py-3">
-          <Button
-            variant="danger-soft"
-            size="sm"
-            onClick={() => setConfirmDelete(true)}
-            title="删除闪念"
-          >
-            <Trash2 className="size-4" aria-hidden />
-          </Button>
+          {!isDraft && (
+            <Button
+              variant="danger-soft"
+              size="sm"
+              onClick={() => setConfirmDelete(true)}
+              title="删除闪念"
+            >
+              <Trash2 className="size-4" aria-hidden />
+            </Button>
+          )}
           <div className="ml-auto flex gap-2">
             {statusActions.map((a) => (
               <Button key={a.label} variant="secondary" size="sm" loading={mutations.process.isPending || mutations.archive.isPending} onClick={() => void a.run().then(onClose)}>
                 <a.icon className="size-4" aria-hidden /> {a.label}
               </Button>
             ))}
-            <Button variant="primary" size="sm" loading={mutations.save.isPending} onClick={() => void save()}>
-              <Save className="size-4" aria-hidden /> 保存
+            <Button variant="primary" size="sm" loading={mutations.save.isPending || saving} onClick={() => void save()}>
+              <Save className="size-4" aria-hidden /> {isDraft ? '保存' : '保存'}
             </Button>
           </div>
         </div>
@@ -215,7 +270,7 @@ export function QuickNoteDialog({ note, onClose }: QuickNoteDialogProps) {
         confirmLabel="删除"
         loading={mutations.remove.isPending}
         onConfirm={async () => {
-          await mutations.remove.mutateAsync(note.id)
+          if (note) await mutations.remove.mutateAsync(note.id)
           onClose()
         }}
       />

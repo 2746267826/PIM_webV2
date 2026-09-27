@@ -4,7 +4,7 @@ import { pcApi } from '../api'
 import { pcKeys } from '../queries'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DayGanttBars } from '@/components/viz/day-gantt-bars'
-import { EChartsBox } from '@/components/viz/echarts-box'
+import { EChartsBox, asTooltipItem, chartTooltip } from '@/components/viz/echarts-box'
 import { todayBusinessDay, businessDayShift } from '@/lib/businessDay'
 import { MetricCard, Button, Card, CardTitle, Chip, Dialog, DialogBody, DialogContent, DialogHeader, EmptyState, Input, Label, PageHeader, Segmented, Textarea } from '@/components/ui'
 import { notifySuccess } from '@/lib/notify'
@@ -59,18 +59,29 @@ export function BrowserPage() {
     return segs
   }, [timeline])
 
-  /* 范围日趋势（堆叠柱 → 简化为按日总专注柱状） */
+  /* 范围日趋势（按日总专注柱状） */
   const trendOption = useMemo(() => {
     const rows = daily ?? []
-    const byDate = new Map<string, number>()
-    for (const r of rows) byDate.set(r.date, (byDate.get(r.date) ?? 0) + r.focusMs / 3600_000)
+    const byDate = new Map<string, { hours: number; visits: number }>()
+    for (const r of rows) {
+      const prev = byDate.get(r.date) ?? { hours: 0, visits: 0 }
+      byDate.set(r.date, { hours: prev.hours + r.focusMs / 3600_000, visits: prev.visits + r.visitCount })
+    }
     const dates = [...byDate.keys()].sort()
     return {
-      tooltip: { trigger: 'axis' },
-      grid: { left: 40, right: 10, top: 10, bottom: 24 },
+      tooltip: chartTooltip({
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (p) => {
+          const it = asTooltipItem(p)
+          const d = byDate.get(dates[it.dataIndex ?? 0])
+          return `${it.axisValueLabel ?? it.name}<br/>专注 <b>${(d?.hours ?? 0).toFixed(2)}</b> 小时<br/>访问 ${d?.visits ?? 0} 次`
+        },
+      }),
+      grid: { left: 46, right: 12, top: 10, bottom: 24 },
       xAxis: { type: 'category', data: dates.map((d) => d.slice(5)), axisLabel: { fontSize: 10, color: '#94A3B8' } },
-      yAxis: { type: 'value', name: '小时', axisLabel: { fontSize: 10, color: '#94A3B8' } },
-      series: [{ type: 'bar', barWidth: 18, itemStyle: { color: '#2563EB', borderRadius: [3, 3, 0, 0] }, data: dates.map((d) => Number(byDate.get(d)!.toFixed(2))) }],
+      yAxis: { type: 'value', name: '小时', nameTextStyle: { fontSize: 9, color: '#94A3B8' }, axisLabel: { fontSize: 10, color: '#94A3B8' } },
+      series: [{ type: 'bar', barWidth: 18, itemStyle: { color: '#2563EB', borderRadius: [3, 3, 0, 0] }, data: dates.map((d) => Number((byDate.get(d)?.hours ?? 0).toFixed(2))) }],
     }
   }, [daily])
 
@@ -78,7 +89,16 @@ export function BrowserPage() {
   const hostsOption = useMemo(() => {
     const hosts = (summary?.topHosts ?? []).slice(0, 8).slice().reverse()
     return {
-      grid: { left: 100, right: 16, top: 6, bottom: 20 },
+      tooltip: chartTooltip({
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (p) => {
+          const it = asTooltipItem(p)
+          const h = hosts.find((x) => x.host === it.name)
+          return `${it.name}<br/>专注 <b>${Math.round(Number(it.value))}</b> 分钟${h ? `<br/>访问 ${h.visitCount} 次` : ''}`
+        },
+      }),
+      grid: { left: 104, right: 24, top: 6, bottom: 20 },
       xAxis: { type: 'value', axisLabel: { fontSize: 10, color: '#94A3B8' } },
       yAxis: { type: 'category', data: hosts.map((h) => h.host), axisLabel: { fontSize: 11, color: '#64748B' } },
       series: [{ type: 'bar', barWidth: 12, itemStyle: { color: '#16A34A', borderRadius: [0, 3, 3, 0] }, data: hosts.map((h) => Math.round(h.focusMs / 60000)) }],
