@@ -61,12 +61,16 @@ const TASKS = [
 const LAYERS = {
   start: at(0),
   end: plusDays(1),
+  // 可变：排期（tasks/{id}/plan）会向此数组追加 task-segments 条目
   items: [
     { id: 'task-segment:t3', layer: 'task-segments', objectType: 'task-segment', objectId: 'seg-1', title: '深度工作块：日历组件', startsAt: at(14), endsAt: at(16), source: 'manual', status: 'planned', color: '#22C55E', requiresConfirmation: false },
     { id: 'habit:e3', layer: 'habits', objectType: 'habit-occurrence', objectId: 'h1', title: '健身', startsAt: at(19), endsAt: at(20), source: 'manual', status: 'Planned', color: '#A855F7', requiresConfirmation: false },
     { id: 'availability:a1', layer: 'availability', objectType: 'availability-window', objectId: 'a1', title: '空闲', startsAt: at(13), endsAt: at(14), source: 'manual', status: 'available', color: '#0EA5E9', requiresConfirmation: false },
   ],
 }
+
+/** 运行时可变排期结果（plan/segments 写入后，layers 查询立即可见） */
+const PLANNED_SEGMENTS = []
 
 const CONFIRMATION = {
   id: 'c1'.padEnd(36, '0'),
@@ -128,8 +132,21 @@ createServer((req, res) => {
   if (path === '/api/v1/calendar/calendars') { ok(res, CAL_BOOKS); return }
   if (path === '/api/v1/calendar/task-books') { ok(res, TASK_BOOKS); return }
   if (path === '/api/v1/calendar/events') { paged(res, EVENTS); return }
-  if (path === '/api/v1/calendar/layers') { ok(res, LAYERS); return }
+  if (path === '/api/v1/calendar/layers') {
+    // 合并运行时排期结果：拖入排期后日历上立即出现任务段（模拟真实后端行为）
+    ok(res, { start: LAYERS.start, end: LAYERS.end, items: [...LAYERS.items, ...PLANNED_SEGMENTS] })
+    return
+  }
   if (path === '/api/v1/calendar/tasks') {
+    // 应用运行时排期：把已排期任务从收件箱移除并带上计划时间
+    for (const seg of PLANNED_SEGMENTS) {
+      const task = TASKS.find((t) => t.id === seg.taskId)
+      if (task) {
+        task.isInbox = false
+        task.dtStart = seg.startsAt
+        task.plannedEnd = seg.endsAt
+      }
+    }
     if (url.searchParams.has('page') || url.searchParams.has('search') || url.searchParams.has('status') || url.searchParams.has('priority') || url.searchParams.has('inbox')) {
       let list = TASKS
       if (url.searchParams.get('inbox') === 'true') list = list.filter((t) => t.isInbox)
@@ -832,6 +849,46 @@ if (path === '/api/v1/files/sync-batches') {
   return
 }
 if (/pc\/app-signatures$/.test(path) && req.method === 'POST') { readBody(() => ok(res, { id: 'sig-new' })); return }
+
+/* MOCK-PLAN-REAL */
+if (/\/calendar\/tasks\/[^/]+\/plan$/.test(path) && req.method === 'POST') {
+  readBody((b) => {
+    const taskId = path.split('/')[5]
+    const task = TASKS.find((t) => t.id === taskId)
+    const start = b.plannedStart
+    const end = b.plannedEnd ?? (() => {
+      // 无 plannedEnd 时按时长估算（与前端一致）
+      const m = /^(\d+):(\d{2})(?::\d{2})?$/.exec(b.estimatedDuration ?? task?.estimatedDuration ?? '01:00:00')
+      const minutes = m ? Number(m[1]) * 60 + Number(m[2]) : 60
+      return new Date(new Date(start).getTime() + minutes * 60000).toISOString()
+    })()
+    // 幂等：同任务重复排期覆盖旧段
+    const idx = PLANNED_SEGMENTS.findIndex((s) => s.taskId === taskId)
+    const seg = {
+      id: 'task-segment:' + taskId,
+      layer: 'task-segments',
+      objectType: 'task-segment',
+      objectId: 'seg-' + taskId,
+      taskId,
+      title: task?.title ?? '任务',
+      startsAt: start,
+      endsAt: end,
+      source: 'manual',
+      status: 'planned',
+      color: '#22C55E',
+      requiresConfirmation: false,
+    }
+    if (idx >= 0) PLANNED_SEGMENTS[idx] = seg
+    else PLANNED_SEGMENTS.push(seg)
+    if (task) {
+      task.isInbox = false
+      task.dtStart = start
+      task.plannedEnd = end
+    }
+    ok(res, task ?? { id: taskId })
+  })
+  return
+}
 
 /* MOCK-AUDIT-FIX */
 if (/mobile\/analytics\/sessions\/[^/]+\/events$/.test(path)) {

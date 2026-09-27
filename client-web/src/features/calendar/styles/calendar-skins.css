@@ -186,6 +186,10 @@
 .skin-gcal .fc-timegrid-slot {
   height: 2.2em;
 }
+/* 短任务段（如 15 分钟排期）保证最小可读高度 */
+.skin-gcal .fc-timegrid-event {
+  min-height: 16px;
+}
 .skin-gcal .fc-timegrid-slot-label-cushion {
   color: var(--color-text-4);
   font-size: 11px;
@@ -223,4 +227,26 @@
 .skin-gcal .fc-timegrid-now-indicator-line {
   border-color: var(--color-crit);
   border-width: 2px;
+}
+
+/* ── 外部拖拽（收件箱任务 → 时间槽）──────────────────────────
+   镜像卡沿用玻璃皮肤的饱和渐变与投影，并明确"可落位"的视觉反馈。 */
+.skin-gcal .fc-event-mirror {
+  opacity: 0.9 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 0.28) !important;
+  transform: scale(1.02);
+  cursor: grabbing !important;
+}
+/* 拖拽经过的可落位时间槽高亮 */
+.skin-gcal .fc-timegrid-slot-lane.fc-highlight {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+/* 落位动画：新排期任务段淡入（客户端移除镜像后由服务端图层呈现） */
+@keyframes pim-segment-land {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.skin-gcal .fc-timegrid-event {
+  animation: pim-segment-land 220ms cubic-bezier(.32,.72,.24,1);
 }

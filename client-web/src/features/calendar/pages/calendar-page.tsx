@@ -6,6 +6,7 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin, { ThirdPartyDraggable } from '@fullcalendar/interaction'
 import zhCnLocale from '@fullcalendar/core/locales/zh-cn'
 import type { DatesSetArg, EventClickArg } from '@fullcalendar/core'
+import type { EventReceiveArg } from '@fullcalendar/interaction'
 import { CalendarPlus, ChevronLeft, ChevronRight, Inbox, Paintbrush } from 'lucide-react'
 import { Link } from 'react-router'
 import '../styles/calendar-skins.css'
@@ -134,30 +135,46 @@ export function CalendarPage() {
 
   /*
    * 收件箱任务拖入 → 排期（自动按时长估算）。
-   * FullCalendar v6 的外部拖入由 pointer events 驱动，必须用 ThirdPartyDraggable 包装拖拽源；
-   * 此处以「整页」为容器、`.fc-external-drag` 为条目选择器，命中后由 drop 回调给出时间槽。
+   * FullCalendar v6 外部拖入由 pointer events 驱动，必须用 ThirdPartyDraggable 包装拖拽源；
+   * 同时必须提供 eventData —— 否则只有 drop 回调、没有镜像吸附与落位动画。
+   * 这里把拖拽中的临时事件交给 FC 渲染（得到原生拖拽动画 + 时间槽吸附），
+   * 在 eventReceive 里把它移除，改由服务端数据（排期后的任务段图层）呈现真实状态。
    */
   useEffect(() => {
     if (typeof document === 'undefined') return
     const draggable = new ThirdPartyDraggable(document.body, {
       itemSelector: '.fc-external-drag',
+      eventData: (el) => {
+        const duration = el.getAttribute('data-task-duration') ?? '01:00:00'
+        const minutes = durationToMinutes(duration) ?? 60
+        return {
+          title: el.getAttribute('data-task-title') ?? '任务',
+          duration: { minutes },
+          create: true,
+        }
+      },
     })
     return () => draggable.destroy()
   }, [])
 
-  function onDrop(info: { date: Date; draggedEl: HTMLElement }) {
+  /** 镜像落位：移除临时事件（真实呈现交给排期后的服务端图层），并发起排期 */
+  function onEventReceive(info: EventReceiveArg) {
     const taskId = info.draggedEl.getAttribute('data-task-id')
+    // 落位时间取 FC 计算好的事件起点（已吸附到时间槽）
+    const start = info.event.start ?? undefined
+    // 立即移除镜像事件：日历上的真实呈现由 /calendar/layers 的 task-segments 提供
+    info.event.remove()
     if (!taskId) return
-    const start = info.date
+
     const task = (inboxData ?? []).find((t) => t.id === taskId)
-    // estimatedDuration 为后端 TimeSpan "c" 格式；有值则按其推算 plannedEnd
-    const minutes = durationToMinutes(task?.estimatedDuration ?? null)
-    const end = minutes != null ? new Date(start.getTime() + minutes * 60_000) : undefined
+    const minutes = durationToMinutes(task?.estimatedDuration ?? null) ?? 60
+    const end = start ? new Date(start.getTime() + minutes * 60_000) : undefined
+
     plan.mutate(
       {
         id: taskId,
         body: {
-          plannedStart: start.toISOString(),
+          plannedStart: (start ?? new Date()).toISOString(),
           ...(end ? { plannedEnd: end.toISOString() } : {}),
           ...(task?.estimatedDuration ? { estimatedDuration: task.estimatedDuration } : {}),
         },
@@ -230,7 +247,7 @@ export function CalendarPage() {
 
       {/* 日历主体 + 收件箱侧板（皮肤：谷歌竖条日视图 / 圆点行月视图） */}
       <div className="flex min-h-0 flex-1 gap-4">
-        <div className="skin-gcal min-w-0 flex-1">
+        <div className="skin-gcal min-w-0 flex-1 select-none [&_.fc-event-mirror]:pointer-events-none">
           <FullCalendar
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -243,7 +260,7 @@ export function CalendarPage() {
             selectMirror
             select={onSelect}
             droppable
-            drop={onDrop}
+            eventReceive={onEventReceive}
             eventClick={onEventClick}
             height="auto"
             stickyHeaderDates
@@ -319,7 +336,7 @@ export function CalendarPage() {
         {/* 收件箱侧板（≥1024 常驻；sticky 使其在长日历滚动时保持可见，拖拽源不跑出视口） */}
         <aside className="hidden w-[280px] shrink-0 lg:block">
           <div className="sticky top-2 max-h-[calc(100dvh-6rem)] overflow-hidden rounded-card border border-border bg-bg shadow-card">
-          <InboxPanel
+            <InboxPanel
             onNewTask={() => setTaskEditorOpen(true)}
             onNewEvent={() =>
               setEventEditor({ mode: 'create', initial: { start: nextHour(), end: nextHourPlus() } })
@@ -332,7 +349,7 @@ export function CalendarPage() {
       {/* 窄屏收件箱抽屉 */}
       <Drawer open={inboxOpen} onOpenChange={setInboxOpen}>
         <DrawerContent side="right" className="w-[320px]">
-          <InboxPanel
+            <InboxPanel
             onNewTask={() => {
               setInboxOpen(false)
               setTaskEditorOpen(true)

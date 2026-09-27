@@ -99,8 +99,10 @@ export function InboxPanel({ onNewTask, onNewEvent, className }: InboxPanelProps
               <li
                 key={task.id}
                 data-task-id={task.id}
+                data-task-title={task.title}
+                data-task-duration={task.estimatedDuration ?? '01:00:00'}
                 title="拖到日历时间槽排期"
-                className="fc-external-drag cursor-grab rounded-ctl border border-transparent px-2 py-1.5 transition-colors hover:border-border hover:bg-surface active:cursor-grabbing"
+                className="fc-external-drag cursor-grab rounded-ctl border border-transparent px-2 py-1.5 transition-colors select-none hover:border-border hover:bg-surface active:cursor-grabbing"
               >
                 <div className="flex items-center gap-2">
                   <span
