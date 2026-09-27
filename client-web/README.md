@@ -11,11 +11,22 @@
 
 ```bash
 npm install          # 安装依赖
-npm run dev          # 开发服务器（/api 代理 → http://localhost:5858）
+npm run dev          # 开发服务器（/api 代理 → 测试 API，可用 PIM_API_TARGET 覆盖）
 npm run test         # vitest 单测
 npm run build        # tsc + vite build → dist/
-node scripts/mock-api.mjs   # P0 视觉走查用 mock API（:5858，仅登录/会话/状态/版本）
 ```
+
+### 后端地址
+
+开发服务器默认将 `/api` 代理到 **https://pim.example.com:15860**（测试 API）。可用环境变量覆盖：
+
+```bash
+PIM_API_TARGET=http://localhost:5858 npm run dev   # 指向本机后端
+```
+
+也可在应用内「设置 → 服务器」直接填写 API 地址（不依赖代理；跨域需后端 CORS 白名单放行该来源）。
+
+> `scripts/mock-api.mjs` 是**已停用**的离线 mock（原用于无后端时的视觉走查），仅在没有可用后端时临时启用。
 
 ### Android 壳（Capacitor）
 
