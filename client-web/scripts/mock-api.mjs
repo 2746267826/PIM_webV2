@@ -25,11 +25,11 @@ const TOKENS = () => ({
 
 /* ── mock 数据 ─────────────────────────────────────────── */
 
-const CAL_BOOKS = [
+let CAL_BOOKS = [
   { id: 'cal-1', name: '工作', color: '#3B82F6', kind: 'calendar', isDefault: true, eventCount: 3, source: 'manual', outlookCalendarBindingId: null, canEdit: true },
   { id: 'cal-2', name: '生活', color: '#22C55E', kind: 'calendar', isDefault: false, eventCount: 1, source: 'manual', outlookCalendarBindingId: null, canEdit: true },
 ]
-const TASK_BOOKS = [
+let TASK_BOOKS = [
   { id: 'tb-1', domainProjectId: null, name: '收集箱', kind: 'task', status: 'Active', taskCount: 2 },
   { id: 'tb-2', domainProjectId: null, name: '本周', kind: 'task', status: 'Active', taskCount: 2 },
 ]
@@ -45,13 +45,13 @@ const plusDays = (n) => {
   return d.toISOString()
 }
 
-const EVENTS = [
+let EVENTS = [
   { id: 'e1', calendarId: 'cal-1', uid: 'e1@pim', title: '晨会', description: null, location: '301', dtStart: at(9), dtEnd: at(9, 30), rrule: null, status: 'CONFIRMED', source: 'manual', originalEventId: null, isAllDay: false, timeZoneId: null, sourceTimeZoneId: null, sourceUid: null, recurrenceId: null, descriptionFormat: 'text', showAs: null, importance: 'high', sensitivity: null, categories: null, isReminderOn: null, reminderMinutesBeforeStart: null, organizer: null, attendees: null, isOnlineMeeting: null, onlineMeetingProvider: null, onlineMeetingUrl: null, externalLink: null, isSeriesMaster: false, isException: false, seriesMasterId: null, isCancelled: false, outlookCalendarBindingId: null, outlookEventId: null, outlookEtag: null, outlookEventType: null },
   { id: 'e2', calendarId: 'cal-1', uid: 'e2@pim', title: '方案评审', description: 'P1 里程碑', location: null, dtStart: at(11), dtEnd: at(12), rrule: null, status: 'CONFIRMED', source: 'manual', originalEventId: null, isAllDay: false, timeZoneId: null, sourceTimeZoneId: null, sourceUid: null, recurrenceId: null, descriptionFormat: 'text', showAs: null, importance: null, sensitivity: null, categories: null, isReminderOn: null, reminderMinutesBeforeStart: null, organizer: null, attendees: null, isOnlineMeeting: null, onlineMeetingProvider: null, onlineMeetingUrl: null, externalLink: null, isSeriesMaster: false, isException: false, seriesMasterId: null, isCancelled: false, outlookCalendarBindingId: null, outlookEventId: null, outlookEtag: null, outlookEventType: null },
   { id: 'e3', calendarId: 'cal-2', uid: 'e3@pim', title: '健身', description: null, location: null, dtStart: at(19), dtEnd: at(20), rrule: 'FREQ=DAILY', status: 'CONFIRMED', source: 'manual', originalEventId: null, isAllDay: false, timeZoneId: null, sourceTimeZoneId: null, sourceUid: null, recurrenceId: null, descriptionFormat: 'text', showAs: null, importance: null, sensitivity: null, categories: null, isReminderOn: null, reminderMinutesBeforeStart: null, organizer: null, attendees: null, isOnlineMeeting: null, onlineMeetingProvider: null, onlineMeetingUrl: null, externalLink: null, isSeriesMaster: false, isException: false, seriesMasterId: null, isCancelled: false, outlookCalendarBindingId: null, outlookEventId: null, outlookEtag: null, outlookEventType: null },
 ]
 
-const TASKS = [
+let TASKS = [
   { id: 't1', calendarId: null, uid: 't1@pim', title: '写 P1 周报', description: null, priority: 9, estimatedDuration: '00:30:00', minimumSegment: null, dtStart: null, due: at(18), status: 'NEEDS-ACTION', isInbox: true, sortOrder: 1, subTasks: [], plannedEnd: null, taskBookId: 'tb-1', percentComplete: 0 },
   { id: 't2', calendarId: null, uid: 't2@pim', title: '回复客户邮件', description: null, priority: 5, estimatedDuration: '00:15:00', minimumSegment: null, dtStart: null, due: plusDays(1), status: 'NEEDS-ACTION', isInbox: true, sortOrder: 2, subTasks: [], plannedEnd: null, taskBookId: 'tb-1', percentComplete: 0 },
   { id: 't3', calendarId: null, uid: 't3@pim', title: '深度工作块：日历组件', description: null, priority: 5, estimatedDuration: '02:00:00', minimumSegment: null, dtStart: at(14), due: null, status: 'NEEDS-ACTION', isInbox: false, sortOrder: 3, subTasks: [], plannedEnd: at(16), taskBookId: 'tb-2', percentComplete: 0 },
@@ -129,15 +129,33 @@ createServer((req, res) => {
   if (path === '/api/v1/status/summary') { ok(res, { status: 1, label: '正常', message: '全部组件健康（mock）', checkedAt: new Date().toISOString() }); return }
 
   /* 日历域 */
-  if (path === '/api/v1/calendar/calendars') { ok(res, CAL_BOOKS); return }
-  if (path === '/api/v1/calendar/task-books') { ok(res, TASK_BOOKS); return }
-  if (path === '/api/v1/calendar/events') { paged(res, EVENTS); return }
-  if (path === '/api/v1/calendar/layers') {
-    // 合并运行时排期结果：拖入排期后日历上立即出现任务段（模拟真实后端行为）
-    ok(res, { start: LAYERS.start, end: LAYERS.end, items: [...LAYERS.items, ...PLANNED_SEGMENTS] })
+  if (path === '/api/v1/calendar/calendars' && req.method === 'GET') { ok(res, CAL_BOOKS); return }
+  if (path === '/api/v1/calendar/task-books' && req.method === 'GET') { ok(res, TASK_BOOKS); return }
+  if (path === '/api/v1/calendar/events' && req.method === 'GET') {
+    // 双态行为（规格 calendar.md:142-144）：search/calendarId/page/pageSize 任一出现 → PagedResult；否则旧版全量数组
+    const hasPaging = ['page', 'pageSize', 'search', 'calendarId'].some((k) => url.searchParams.has(k))
+    const search = url.searchParams.get('search')
+    const calId = url.searchParams.get('calendarId')
+    let list = EVENTS
+    if (search) list = list.filter((e) => e.title.includes(search))
+    if (calId) list = list.filter((e) => e.calendarId === calId)
+    if (hasPaging) paged(res, list)
+    else ok(res, list)
     return
   }
-  if (path === '/api/v1/calendar/tasks') {
+  if (path === '/api/v1/calendar/layers' && req.method === 'GET') {
+    // 合并运行时数据：events 图层取当前 EVENTS（含新建日程），task-segments 取运行时排期结果
+    const eventLayerItems = EVENTS.map((e) => ({
+      id: 'event:' + e.id, layer: 'events', objectType: 'event', objectId: e.id,
+      title: e.title, startsAt: e.dtStart, endsAt: e.dtEnd, source: e.source,
+      status: e.status, color: (CAL_BOOKS.find((c) => c.id === e.calendarId) ?? {}).color ?? '#3B82F6',
+      requiresConfirmation: false,
+    }))
+    const staticNonEvent = LAYERS.items.filter((i) => i.layer !== 'events')
+    ok(res, { start: LAYERS.start, end: LAYERS.end, items: [...eventLayerItems, ...staticNonEvent, ...PLANNED_SEGMENTS] })
+    return
+  }
+  if (path === '/api/v1/calendar/tasks' && req.method === 'GET') {
     // 应用运行时排期：把已排期任务从收件箱移除并带上计划时间
     for (const seg of PLANNED_SEGMENTS) {
       const task = TASKS.find((t) => t.id === seg.taskId)
@@ -158,12 +176,12 @@ createServer((req, res) => {
     }
     return
   }
-  if (path.startsWith('/api/v1/calendar/tasks/') && path.endsWith('/segments')) {
+  if (path.startsWith('/api/v1/calendar/tasks/') && path.endsWith('/segments') && req.method === 'GET') {
     const taskId = path.split('/')[5]
     ok(res, [{ id: 'seg-1', taskId, taskTitle: '深度工作块：日历组件', startsAt: at(14), endsAt: at(16), status: 'planned', source: 'manual', planningReason: null, confirmationId: null }])
     return
   }
-  if (path === '/api/v1/calendar/calendars/cal-1/delete-preview' || /delete-preview$/.test(path)) {
+  if ((path === '/api/v1/calendar/calendars/cal-1/delete-preview' || /delete-preview$/.test(path)) && req.method === 'POST') {
     ok(res, { targetType: 'calendar-book', targetId: 'cal-1', title: '工作', operationKind: 'calendar.delete', affectedCount: 4, samples: EVENTS.slice(0, 5).map((e) => ({ id: e.id, type: 'event', title: e.title, start: e.dtStart, end: e.dtEnd, bookName: '工作' })), summary: '删除「工作」及其 4 个活跃日程。', requiresStrictConfirmation: true })
     return
   }
@@ -887,6 +905,131 @@ if (/\/calendar\/tasks\/[^/]+\/plan$/.test(path) && req.method === 'POST') {
     }
     ok(res, task ?? { id: taskId })
   })
+  return
+}
+
+
+/* MOCK-CRUD-REAL */
+if (path === '/api/v1/calendar/events' && req.method === 'POST') {
+  readBody((b) => {
+    const id = 'e' + (++seq)
+    const ev = {
+      id, calendarId: b.calendarId ?? 'cal-1', uid: b.uid ?? (id + '@pim'),
+      title: b.title ?? '未命名', description: b.description ?? null, location: b.location ?? null,
+      dtStart: b.dtStart, dtEnd: b.dtEnd, rrule: b.rrule ?? null, status: 'CONFIRMED',
+      source: 'manual', originalEventId: null, isAllDay: b.isAllDay ?? false,
+      timeZoneId: b.timeZoneId ?? null, sourceTimeZoneId: null, sourceUid: null, recurrenceId: null,
+      descriptionFormat: b.descriptionFormat ?? 'text', showAs: b.showAs ?? null,
+      importance: b.importance ?? null, sensitivity: b.sensitivity ?? null,
+      categories: b.categories ?? null, isReminderOn: b.isReminderOn ?? null,
+      reminderMinutesBeforeStart: b.reminderMinutesBeforeStart ?? null,
+      organizer: b.organizer ?? null, attendees: b.attendees ?? null,
+      isOnlineMeeting: b.isOnlineMeeting ?? null, onlineMeetingProvider: b.onlineMeetingProvider ?? null,
+      onlineMeetingUrl: b.onlineMeetingUrl ?? null, externalLink: b.externalLink ?? null,
+      isSeriesMaster: Boolean(b.rrule), isException: false, seriesMasterId: null, isCancelled: false,
+      outlookCalendarBindingId: null, outlookEventId: null, outlookEtag: null, outlookEventType: null,
+    }
+    EVENTS.push(ev)
+    ok(res, ev)
+  })
+  return
+}
+if (/\/calendar\/events\/[^/]+$/.test(path) && req.method === 'PUT') {
+  readBody((b) => {
+    const id = path.split('/')[5]
+    const idx = EVENTS.findIndex((e) => e.id === id)
+    if (idx < 0) { json(res, 404, { code: 404, message: '事件不存在', data: null }); return }
+    EVENTS[idx] = { ...EVENTS[idx], ...b, id }
+    ok(res, EVENTS[idx])
+  })
+  return
+}
+if (/\/calendar\/events\/[^/]+$/.test(path) && req.method === 'DELETE') {
+  const id = path.split('/')[5]
+  EVENTS = EVENTS.filter((e) => e.id !== id)
+  ok(res, '已删除')
+  return
+}
+if (path === '/api/v1/calendar/events/batch-delete') {
+  readBody((b) => {
+    const ids = b.ids ?? []
+    const before = EVENTS.length
+    EVENTS = EVENTS.filter((e) => !ids.includes(e.id))
+    ok(res, { operation: 'calendar.events.batch_delete', operationId: 'op-bd', affectedCount: before - EVENTS.length, affectedIds: ids, samples: [], message: `已删除 ${before - EVENTS.length} 个日程` })
+  })
+  return
+}
+if (path === '/api/v1/calendar/tasks' && req.method === 'POST') {
+  readBody((b) => {
+    const id = 't' + (++seq)
+    const task = {
+      id, calendarId: b.calendarId ?? null, uid: id + '@pim',
+      title: b.title ?? '未命名', description: b.description ?? null,
+      priority: b.priority ?? 5, estimatedDuration: b.estimatedDuration ?? null,
+      minimumSegment: b.minimumSegment ?? null, dtStart: b.dtStart ?? null, due: b.due ?? null,
+      status: b.status ?? 'NEEDS-ACTION', isInbox: !b.calendarId && !b.dtStart, sortOrder: TASKS.length + 1,
+      subTasks: [], plannedEnd: b.plannedEnd ?? null, taskBookId: b.taskBookId ?? null,
+      percentComplete: b.percentComplete ?? 0,
+    }
+    TASKS.push(task)
+    ok(res, task)
+  })
+  return
+}
+if (/\/calendar\/tasks\/[^/]+$/.test(path) && req.method === 'DELETE') {
+  const id = path.split('/')[5]
+  TASKS = TASKS.filter((t) => t.id !== id)
+  ok(res, { operation: 'calendar.tasks.delete', operationId: 'op-td', affectedCount: 1, affectedIds: [id], samples: [], message: '已删除' })
+  return
+}
+if (path === '/api/v1/calendar/tasks/batch-delete') {
+  readBody((b) => {
+    const ids = b.ids ?? []
+    const before = TASKS.length
+    TASKS = TASKS.filter((t) => !ids.includes(t.id))
+    ok(res, { operation: 'calendar.tasks.batch_delete', operationId: 'op-tbd', affectedCount: before - TASKS.length, affectedIds: ids, samples: [], message: `已删除 ${before - TASKS.length} 个任务` })
+  })
+  return
+}
+if (path === '/api/v1/calendar/tasks/{id}/checklist'.replace('{id}', path.split('/')[5] ?? '') && req.method === 'POST') {
+  readBody((b) => ok(res, { id: 'chk-' + (++seq), taskId: path.split('/')[5], title: b.title ?? '', isDone: false, sortOrder: b.sortOrder ?? 0 }))
+  return
+}
+if (/\/calendar\/tasks\/[^/]+\/checklist\/[^/]+$/.test(path) && req.method === 'PUT') {
+  readBody((b) => ok(res, { id: path.split('/')[7], taskId: path.split('/')[5], title: b.title ?? '', isDone: b.isDone ?? false, sortOrder: 0 }))
+  return
+}
+if (/\/calendar\/tasks\/[^/]+\/checklist\/[^/]+$/.test(path) && req.method === 'DELETE') {
+  ok(res, path.split('/')[5])
+  return
+}
+if (/\/calendar\/tasks\/[^/]+\/segments$/.test(path) && req.method === 'POST') {
+  readBody((b) => ok(res, { id: 'seg-' + (++seq), taskId: path.split('/')[5], taskTitle: '', startsAt: b.startsAt, endsAt: b.endsAt, status: b.status ?? 'planned', source: b.source ?? 'manual', planningReason: b.planningReason ?? null, confirmationId: null }))
+  return
+}
+if (path === '/api/v1/calendar/calendars' && req.method === 'POST') {
+  readBody((b) => {
+    const book = { id: 'cal-' + (++seq), name: b.name ?? '新日历本', color: b.color ?? '#3B82F6', kind: b.kind ?? 'calendar', isDefault: false, eventCount: 0, source: 'manual', outlookCalendarBindingId: null, canEdit: true }
+    CAL_BOOKS.push(book)
+    ok(res, book)
+  })
+  return
+}
+if (/\/calendar\/calendars\/[^/]+$/.test(path) && req.method === 'PUT') {
+  readBody((b) => {
+    const id = path.split('/')[5]
+    const idx = CAL_BOOKS.findIndex((c) => c.id === id)
+    if (idx >= 0) CAL_BOOKS[idx] = { ...CAL_BOOKS[idx], ...(b.name ? { name: b.name } : {}), ...(b.color ? { color: b.color } : {}) }
+    ok(res, CAL_BOOKS[idx] ?? null)
+  })
+  return
+}
+if (/\/calendar\/calendars\/[^/]+$/.test(path) && req.method === 'DELETE') {
+  const id = path.split('/')[5]
+  CAL_BOOKS = CAL_BOOKS.filter((c) => c.id !== id)
+  EVENTS = EVENTS.filter((e) => e.calendarId !== id)
+  TASKS = TASKS.filter((t) => t.calendarId !== id)
+  ok(res, { operation: 'calendar.calendars.delete', operationId: 'op-cd', affectedCount: 1, affectedIds: [id], samples: [], message: '已删除' })
   return
 }
 
