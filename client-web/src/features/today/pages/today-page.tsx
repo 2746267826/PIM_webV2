@@ -171,11 +171,19 @@ export function TodayPage() {
 
   const groups = useMemo(() => {
     const sections = registry?.sections ?? []
+    /*
+     * 分区归组（规格 02 §today）：行动格=calendar.*、数据条=pc.*、
+     * 运维与状态手风琴=operations.* 及运维侧 provider（endpoints./reminders./reports./sync.）。
+     * 后端当前注册 14 节，其中后 4 个前缀不属于 operations. 但语义同属运维区，
+     * 若不归入会错误落到「未知区块」。
+     */
+    const OPS_PREFIXES = ['operations.', 'endpoints.', 'reminders.', 'reports.', 'sync.']
+    const isOps = (kind: string) => OPS_PREFIXES.some((p) => kind.startsWith(p))
     return {
       action: sections.filter((s) => s.kind.startsWith('calendar.')),
       data: sections.filter((s) => s.kind.startsWith('pc.')),
-      ops: sections.filter((s) => s.kind.startsWith('operations.')),
-      unknown: sections.filter((s) => !s.kind.startsWith('calendar.') && !s.kind.startsWith('pc.') && !s.kind.startsWith('operations.')),
+      ops: sections.filter((s) => isOps(s.kind)),
+      unknown: sections.filter((s) => !s.kind.startsWith('calendar.') && !s.kind.startsWith('pc.') && !isOps(s.kind)),
     }
   }, [registry])
 
