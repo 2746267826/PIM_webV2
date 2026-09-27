@@ -45,6 +45,7 @@ export function AppKnowledgeBasePage() {
   const [search, setSearch] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [contextApp, setContextApp] = useState<KnowledgeApp | null>(null)
+  const [editingApp, setEditingApp] = useState<KnowledgeApp | null>(null)
 
   const apps = useQuery({
     queryKey: ['knowledge', 'apps', search],
@@ -75,8 +76,17 @@ export function AppKnowledgeBasePage() {
         }
       />
 
-      {/* 内联新增表单 */}
+      {/* 内联新增/编辑表单 */}
       {addOpen && <AddAppForm onDone={() => { setAddOpen(false); invalidate() }} />}
+      {editingApp && (
+        <AddAppForm
+          editing={editingApp}
+          onDone={() => {
+            setEditingApp(null)
+            invalidate()
+          }}
+        />
+      )}
 
       <div className="mb-3 flex items-center gap-2">
         <Input className="w-56" placeholder="搜索进程名/显示名…" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -124,28 +134,33 @@ export function AppKnowledgeBasePage() {
                     <td className="px-3 py-2">
                       <StatusBadge tone={builtin ? 'info' : 'ok'} dot={false}>{builtin ? '内置' : a.source === 'learned' ? '学习' : '自定义'}</StatusBadge>
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      {builtin ? (
-                        <span className="text-[11px] text-text-4">内置不可删</span>
-                      ) : (
-                        <button
-                          type="button"
-                          aria-label={`删除 ${a.displayName}`}
-                          className="rounded-ctl p-1 text-text-4 outline-none hover:text-crit"
-                          onClick={async () => {
-                            if (!window.confirm(`删除「${a.displayName}」的签名记录？`)) return
-                            try {
-                              await apiDelete(`/api/v1/pc/app-signatures/${a.id}`)
-                              notifySuccess('已删除')
-                              invalidate()
-                            } catch (err) {
-                              notifyError(err instanceof Error ? err.message : '删除失败')
-                            }
-                          }}
-                        >
-                          <Trash2 className="size-3.5" aria-hidden />
-                        </button>
-                      )}
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-end gap-0.5">
+                        <Button variant="ghost" size="sm" onClick={() => setEditingApp(a)}>
+                          编辑
+                        </Button>
+                        {builtin ? (
+                          <span className="text-[11px] text-text-4">内置不可删</span>
+                        ) : (
+                          <button
+                            type="button"
+                            aria-label={`删除 ${a.displayName}`}
+                            className="rounded-ctl p-1 text-text-4 outline-none hover:text-crit"
+                            onClick={async () => {
+                              if (!window.confirm(`删除「${a.displayName}」的签名记录？`)) return
+                              try {
+                                await apiDelete(`/api/v1/pc/app-signatures/${a.id}`)
+                                notifySuccess('已删除')
+                                invalidate()
+                              } catch (err) {
+                                notifyError(err instanceof Error ? err.message : '删除失败')
+                              }
+                            }}
+                          >
+                            <Trash2 className="size-3.5" aria-hidden />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
@@ -161,13 +176,22 @@ export function AppKnowledgeBasePage() {
   )
 }
 
-function AddAppForm({ onDone }: { onDone: () => void }) {
+/** 应用签名表单：新建（editing=null）或编辑已有条目 */
+function AddAppForm({ onDone, editing }: { onDone: () => void; editing?: KnowledgeApp | null }) {
   const qc = useQueryClient()
-  const [form, setForm] = useState({ processName: '', displayName: '', categoryPath: '', productivity: 'neutral', icon: '', description: '' })
+  const isEdit = editing != null
+  const [form, setForm] = useState({
+    processName: editing?.processName ?? '',
+    displayName: editing?.displayName ?? '',
+    categoryPath: editing?.categoryPath ?? '',
+    productivity: editing?.productivity ?? 'neutral',
+    icon: editing?.icon ?? '',
+    description: '',
+  })
 
   return (
     <Card className="mb-3 p-4">
-      <CardTitle>添加应用</CardTitle>
+      <CardTitle>{isEdit ? `编辑应用：${editing!.displayName}` : '添加应用'}</CardTitle>
       <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <div><Label>进程名</Label><Input className="h-8" value={form.processName} onChange={(e) => setForm((f) => ({ ...f, processName: e.target.value }))} /></div>
         <div><Label>显示名</Label><Input className="h-8" value={form.displayName} onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))} /></div>
@@ -188,18 +212,29 @@ function AddAppForm({ onDone }: { onDone: () => void }) {
           disabled={!form.processName.trim() || !form.displayName.trim()}
           onClick={async () => {
             try {
-              await apiPost('/api/v1/pc/app-signatures/', { ...form, categoryPath: form.categoryPath || null, icon: form.icon || null, description: form.description || null })
-              notifySuccess('已添加')
+              // 新增与更新同一端点（按进程名 upsert；编辑时以原进程名为键）
+              await apiPost('/api/v1/pc/app-signatures/', {
+                ...form,
+                categoryPath: form.categoryPath || null,
+                icon: form.icon || null,
+                description: form.description || null,
+              })
+              notifySuccess(isEdit ? '已保存修改' : '已添加')
               qc.invalidateQueries({ queryKey: ['knowledge'] })
               onDone()
             } catch (err) {
-              notifyError(err instanceof Error ? err.message : '添加失败')
+              notifyError(err instanceof Error ? err.message : isEdit ? '保存失败' : '添加失败')
             }
           }}
         >
-          保存
+          {isEdit ? '保存修改' : '保存'}
         </Button>
         <Button variant="secondary" size="sm" onClick={onDone}>取消</Button>
+        {isEdit && (
+          <span className="self-center text-[11px] text-text-4">
+            内置条目可修正显示名/分类/效率等展示信息
+          </span>
+        )}
       </div>
     </Card>
   )

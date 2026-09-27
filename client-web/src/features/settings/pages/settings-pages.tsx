@@ -8,6 +8,9 @@ import { formatTime } from '@/lib/datetime'
 
 import { notifyError, notifySuccess } from '@/lib/notify'
 import { Button, Card, CardTitle, Chip, ConfirmDialog, Dialog, DialogBody, DialogContent, DialogHeader, EmptyState, Input, Label, PageHeader, Segmented, Select, Skeleton, StatusBadge, Switch } from '@/components/ui'
+import { EventEditorDialog } from '@/features/calendar/components/event-editor-dialog'
+import { useCalendars } from '@/features/calendar/queries'
+import type { EventResponse } from '@/features/calendar/types'
 import { cn } from '@/lib/utils'
 
 /* ── /settings/data-reliability 数据可信度 ─────────────────── */
@@ -368,6 +371,16 @@ function MiniTile({ label, value }: { label: string; value: string | number }) {
 
 /* ── /settings/mcp MCP 设置 ───────────────────────────────── */
 
+interface McpActivityEntry {
+  timestamp: string
+  clientName: string
+  toolName: string
+  statusCode: number
+  durationMs: number
+  argumentsSummary: string
+  ownerUserId?: string
+}
+
 interface McpClient {
   id: string
   name: string
@@ -388,7 +401,7 @@ export function McpSettingsPage() {
   const clients = useQuery({ queryKey: ['mcp', 'clients'], queryFn: () => apiGet<McpClient[]>('/api/v1/mcp/clients'), refetchInterval: 10_000 })
   const activity = useQuery({
     queryKey: ['mcp', 'activity'],
-    queryFn: () => apiGet<{ timestamp: string; clientName: string; toolName: string; statusCode: number; durationMs: number; argumentsSummary: string }[]>('/api/v1/mcp/activity'),
+    queryFn: () => apiGet<McpActivityEntry[]>('/api/v1/mcp/activity'),
     refetchInterval: 10_000,
   })
   const catalog = useQuery({
@@ -400,6 +413,7 @@ export function McpSettingsPage() {
   const [newName, setNewName] = useState('')
   const [createdToken, setCreatedToken] = useState<{ name: string; token: string } | null>(null)
   const [permEditing, setPermEditing] = useState<McpClient | null>(null)
+  const [logEntry, setLogEntry] = useState<McpActivityEntry | null>(null)
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['mcp'] })
 
@@ -415,7 +429,7 @@ export function McpSettingsPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="space-y-4">
         <Card className="overflow-x-auto p-4">
           <CardTitle>客户端（{clients.data?.length ?? 0}）</CardTitle>
           <table className="mt-2 w-full text-[13px]">
@@ -485,19 +499,62 @@ export function McpSettingsPage() {
           </table>
         </Card>
 
-        <Card className="flex max-h-[560px] flex-col p-4">
-          <CardTitle>实时调用流水</CardTitle>
-          <div className="mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto">
-            {(activity.data ?? []).map((a, i) => (
-              <div key={i} className="flex items-center gap-2 rounded-ctl bg-surface px-2.5 py-1.5 text-[12px]">
-                <span className="tnum shrink-0 text-text-4">{formatTime(a.timestamp)}</span>
-                <span className="min-w-0 flex-1 truncate text-text-2">{a.toolName}</span>
-                <StatusBadge tone={a.statusCode === 200 ? 'ok' : 'crit'} dot={false}>{a.statusCode}</StatusBadge>
-                <span className="tnum shrink-0 text-text-4">{a.durationMs}ms</span>
-              </div>
-            ))}
-            {(activity.data?.length ?? 0) === 0 && <EmptyState size="sm" title="暂无调用记录" description="内存队列，重启后清空。" />}
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle>实时调用流水</CardTitle>
+            <span className="tnum text-xs text-text-4">最近 {activity.data?.length ?? 0} 条（内存队列，最多 100 条）</span>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="ml-auto"
+              loading={activity.isFetching}
+              onClick={() => void activity.refetch()}
+            >
+              <RefreshCw className="size-3.5" aria-hidden /> 刷新
+            </Button>
           </div>
+          <div className="mt-2 overflow-x-auto">
+            {(activity.data?.length ?? 0) === 0 ? (
+              <EmptyState size="sm" title="暂无调用记录" description="MCP 客户端调用工具后会出现这里（每 10 秒自动刷新）。" />
+            ) : (
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="bg-surface text-left text-xs text-text-3">
+                    <th className="px-3 py-2 font-medium">时间</th>
+                    <th className="px-3 py-2 font-medium">客户端</th>
+                    <th className="px-3 py-2 font-medium">工具</th>
+                    <th className="px-3 py-2 font-medium">状态</th>
+                    <th className="px-3 py-2 text-right font-medium">耗时</th>
+                    <th className="px-3 py-2 font-medium">参数</th>
+                    <th className="px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-divider">
+                  {(activity.data ?? []).map((a, i) => (
+                    <tr key={i} className="transition-colors hover:bg-surface">
+                      <td className="tnum px-3 py-1.5 text-text-4">{formatTime(a.timestamp)}</td>
+                      <td className="px-3 py-1.5 text-text-2">{a.clientName}</td>
+                      <td className="mono px-3 py-1.5 text-text-1">{a.toolName}</td>
+                      <td className="px-3 py-1.5">
+                        <StatusBadge tone={a.statusCode === 200 ? 'ok' : 'crit'} dot={false}>{a.statusCode}</StatusBadge>
+                      </td>
+                      <td className="tnum px-3 py-1.5 text-right text-text-3">{a.durationMs}ms</td>
+                      <td className="mono max-w-72 truncate px-3 py-1.5 text-[11px] text-text-3" title={a.argumentsSummary}>
+                        {a.argumentsSummary || '—'}
+                      </td>
+                      <td className="px-3 py-1.5 text-right">
+                        <Button variant="ghost" size="sm" onClick={() => setLogEntry(a)}>完整日志</Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] text-text-4">
+            记录为进程内存队列（非持久化）：含时间、客户端、工具名、状态码、耗时与入参摘要（截断 120 字符）；
+            完整入参 JSON 见每行「完整日志」。
+          </p>
         </Card>
       </div>
 
@@ -550,12 +607,69 @@ export function McpSettingsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* 完整调用日志 */}
+      <Dialog open={logEntry != null} onOpenChange={(o) => !o && setLogEntry(null)}>
+        <DialogContent className="max-w-[560px]">
+          <DialogHeader
+            title={logEntry?.toolName ?? ''}
+            description={logEntry ? `${logEntry.clientName} · ${formatTime(logEntry.timestamp)}` : undefined}
+          />
+          <DialogBody className="space-y-3 text-[13px]">
+            {logEntry && (
+              <>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                  {[
+                    ['状态码', String(logEntry.statusCode)],
+                    ['耗时', `${logEntry.durationMs} ms`],
+                    ['调用时间', formatTime(logEntry.timestamp)],
+                    ['归属用户', logEntry.ownerUserId ?? '—'],
+                  ].map(([k, v]) => (
+                    <div key={k} className="flex gap-2">
+                      <span className="w-20 shrink-0 text-text-3">{k}</span>
+                      <span className="tnum min-w-0 flex-1 break-all text-text-1">{v}</span>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <Label>入参（argumentsSummary）</Label>
+                  <pre className="mono max-h-56 overflow-auto rounded-ctl bg-surface p-3 text-[11px] text-text-2">
+                    {formatArgsSummary(logEntry.argumentsSummary)}
+                  </pre>
+                </div>
+                <InlineAlertNote>
+                  服务端仅保留 120 字符内的入参摘要（内存队列）。需要更完整的调用审计请查看对应域的审计时间线。
+                </InlineAlertNote>
+              </>
+            )}
+          </DialogBody>
+          <div className="flex justify-end gap-2 px-5 py-3.5">
+            <Button variant="secondary" size="sm" onClick={() => setLogEntry(null)}>关闭</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* 权限矩阵 */}
       {permEditing && catalog.data && (
         <McpPermissionDialog client={permEditing} catalog={catalog.data} onClose={() => setPermEditing(null)} onSaved={invalidate} />
       )}
     </div>
   )
+}
+
+function InlineAlertNote({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-ctl border border-info-border bg-info-soft px-3 py-2 text-[12px] text-info">{children}</div>
+  )
+}
+
+/** 入参摘要美化：是 JSON 则缩进展示，否则原样 */
+function formatArgsSummary(raw: string): string {
+  if (!raw) return '（无参数）'
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
 }
 
 function InlineAlertWarn({ title, children }: { title: string; children: React.ReactNode }) {
@@ -668,6 +782,8 @@ export function CalendarDataManagerPage() {
     placeholderData: (prev) => prev,
   })
   const [importTarget, setImportTarget] = useState('')
+  const [editingEvent, setEditingEvent] = useState<EventResponse | null>(null)
+  const calendarBooks = useCalendars('calendar')
   const [deleteOpen, setDeleteOpen] = useState(false)
   const fileRef = useEffectImport()
 
@@ -767,6 +883,7 @@ export function CalendarDataManagerPage() {
               <th className="px-2 py-2 font-medium">日历</th>
               <th className="px-2 py-2 font-medium">起止</th>
               <th className="px-2 py-2 font-medium">重复</th>
+              <th className="px-2 py-2" />
             </tr>
           </thead>
           <tbody className="divide-y divide-divider">
@@ -790,8 +907,15 @@ export function CalendarDataManagerPage() {
                       }
                     />
                   </td>
-                  <td className="px-2 py-1.5 text-text-1">
-                    {e.title}
+                  <td className="px-2 py-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setEditingEvent(e as unknown as EventResponse)}
+                      className="max-w-full truncate text-left text-text-1 outline-none hover:text-primary hover:underline"
+                      title="点击打开完整编辑面板"
+                    >
+                      {e.title}
+                    </button>
                     {e.isCancelled && <StatusBadge tone="neutral" dot={false} className="ml-2">已取消</StatusBadge>}
                   </td>
                   <td className="px-2 py-1.5">
@@ -806,15 +930,27 @@ export function CalendarDataManagerPage() {
                     {new Date(e.dtEnd).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                   </td>
                   <td className="px-2 py-1.5 text-xs text-text-3">{e.rrule ? '↻ 重复' : '—'}</td>
+                  <td className="px-2 py-1.5 text-right">
+                    <Button variant="ghost" size="sm" onClick={() => setEditingEvent(e as unknown as EventResponse)}>
+                      编辑
+                    </Button>
+                  </td>
                 </tr>
               )
             })}
             {(events.data?.items.length ?? 0) === 0 && (
-              <tr><td colSpan={5}><EmptyState size="sm" title="没有匹配的事件" /></td></tr>
+              <tr><td colSpan={6}><EmptyState size="sm" title="没有匹配的事件" /></td></tr>
             )}
           </tbody>
         </table>
       </Card>
+
+      <EventEditorDialog
+        open={editingEvent != null}
+        onOpenChange={(o) => !o && setEditingEvent(null)}
+        calendars={(calendarBooks.data ?? []).filter((c) => c.kind === 'calendar')}
+        event={editingEvent}
+      />
 
       <ConfirmDialog
         open={deleteOpen}

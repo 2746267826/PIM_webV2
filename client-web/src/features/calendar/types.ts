@@ -277,6 +277,10 @@ export interface OutlookSyncBatch {
   errorSummary: string | null
   startedAt: string
   finishedAt: string | null
+  /** 同步模式；写回批次为 writeback */
+  mode: string | null
+  cancelRequested: boolean
+  perCalendarJson: string | null
 }
 
 /* ── 数据中心（跨对象治理） ───────────────────────────────── */

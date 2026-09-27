@@ -239,7 +239,6 @@ createServer((req, res) => {
     ok(res, { provider: 'outlook', clientId: null, status: 'not-connected', tokenHealth: 'missing', lastSyncedAt: null, lastError: null, uiStatus: 'not-configured' })
     return
   }
-  if (path === '/api/v1/calendar/outlook/sync/batches') { ok(res, { items: [], total: 0, page: 1, pageSize: 20 }); return }
 
   /* 提醒 */
   if (path === '/api/v1/calendar/reminders/delivery-log') {
@@ -780,6 +779,81 @@ if (path === '/api/v1/mobile/summary') {
   })
   return
 }
+
+/* MOCK-GAP-FIX */
+if (path === '/api/v1/calendar/recycle-bin') {
+  const mkRb = (id, type, title, book, delAt) => ({ id, type, title, deletedAt: delAt, bookName: book, start: at(9), end: at(10), source: 'manual', deletedByOperationId: null, deletedByOperationKind: null })
+  const items = [
+    mkRb('rb-1', 'event', '晨会', '工作', daysAgo(1)),
+    mkRb('rb-2', 'task', '写 P1 周报', '收集箱', daysAgo(2)),
+    mkRb('rb-3', 'calendar', '旧日历本', null, daysAgo(3)),
+    mkRb('rb-4', 'task-book', '归档任务本', null, daysAgo(5)),
+  ]
+  ok(res, { items, page: 1, pageSize: 50, totalCount: items.length, totalPages: 1 })
+  return
+}
+if (/recycle-bin\/[^/]+\/[^/]+\/restore-preview$/.test(path)) {
+  ok(res, { targetType: 'event', targetId: 'rb-1', title: '晨会', restoreCount: 1, samples: [{ id: 'rb-1', type: 'event', title: '晨会', start: at(9), end: at(10), bookName: '工作' }], conflicts: [], canRestoreWithoutConflict: true })
+  return
+}
+if (/recycle-bin\/[^/]+\/[^/]+\/restore$/.test(path)) {
+  readBody(() => ok(res, { operation: 'calendar.recycle_bin.restore', operationId: 'op-rb', affectedCount: 1, affectedIds: ['rb-1'], samples: [], message: '已恢复' }))
+  return
+}
+if (path === '/api/v1/pc/detail') {
+  const mk = (i, recordType, app, title, keys, clicks) => ({
+    recordType, start: new Date(Date.now() - i * 600000).toISOString(), end: new Date(Date.now() - i * 600000 + 300000).toISOString(),
+    durationSeconds: 300, deviceId: 'ws-01', appName: app, displayName: app, categoryName: '开发', title,
+    keyPresses: keys, totalClicks: clicks, mouseDistance: 1200, scrollDistance: 400, keyCounts: { A: 12, Enter: 3 },
+    raw: { source: 'aw' }, url: null, domain: null, path: null, isLocalFile: false, browserAppName: null, browserWindowTitle: null,
+    audible: null, incognito: null, tabCount: null, absorbedShortEventsCount: 0, absorbedDurationSeconds: 0,
+    sourceWebEventIds: null, sourceWindowEventIds: [1, 2], categoryColor: '#2563EB', projectTag: null,
+    classificationConfidence: 0.9, classificationSource: 'rule', classificationExplanation: '进程名匹配', bucketType: null,
+    recordKey: 'k' + i, recordKeyVersion: 'v1', recordKeyStability: 'stable', sourceBucketIds: null, sourceType: 'aw', interpretationVersion: 'raw-aw-v1',
+  })
+  const items = [
+    mk(1, 'window', 'Code.exe', 'main.tsx — client-web', 486, 42),
+    mk(2, 'web-page', 'chrome.exe', 'GitHub · Pull requests', 120, 18),
+    mk(3, 'input-minute', null, null, 90, 12),
+    mk(4, 'afk', null, null, 0, 0),
+    mk(5, 'window', 'Obsidian.exe', 'PIM 笔记', 210, 8),
+  ]
+  const eventType = url.searchParams.get('eventType')
+  const filtered = eventType ? items.filter((i) => i.recordType === eventType) : items
+  ok(res, { items: filtered, page: 1, pageSize: 50, totalCount: filtered.length, totalPages: 1 })
+  return
+}
+if (path === '/api/v1/calendar/outlook/sync/batches') {
+  const mkBatch = (i, status) => ({
+    id: 'batch-' + i, provider: 'outlook', status,
+    readCount: 120 - i * 10, createdCount: 12 - i, updatedCount: 8 - i, conflictCount: i === 1 ? 1 : 0, confirmationCount: 0, failureCount: status === 'failed' ? 2 : 0,
+    steps: [{ name: 'fetch', status: 'completed', detail: null, at: daysAgo(i) }], errorSummary: status === 'failed' ? '令牌过期，需重新授权' : null,
+    startedAt: daysAgo(i), finishedAt: daysAgo(i - 0.01), mode: 'normal', requestedWindowStart: null, requestedWindowEnd: null,
+    perCalendarJson: null, cancelRequested: false,
+  })
+  const items = [mkBatch(0, 'completed'), mkBatch(1, 'completed-with-errors'), mkBatch(2, 'failed'), mkBatch(3, 'completed')]
+  ok(res, { items, total: items.length, page: 1, pageSize: 20 })
+  return
+}
+if (/outlook\/sync\/[^/]+\/cancel$/.test(path)) { readBody(() => ok(res, '已取消')); return }
+if (path === '/api/v1/calendar/outlook/sync') { readBody((b) => ok(res, { id: 'batch-new', provider: 'outlook', status: 'running', readCount: 0, createdCount: 0, updatedCount: 0, conflictCount: 0, confirmationCount: 0, failureCount: 0, steps: [], errorSummary: null, startedAt: new Date().toISOString(), finishedAt: null, mode: b.mode ?? 'normal', requestedWindowStart: b.rangeStart ?? null, requestedWindowEnd: b.rangeEnd ?? null, perCalendarJson: null, cancelRequested: false })); return }
+if (path === '/api/v1/calendar/outlook/check') { ok(res, { provider: 'outlook', tenantId: 'common', clientId: null, scopes: 'Calendars.ReadWrite', status: 'not-connected', tokenHealth: 'missing', lastSyncedAt: null, lastError: null, uiStatus: 'not-configured', activeAuthorization: null }); return }
+if (path === '/api/v1/calendar/outlook/device-code') { ok(res, { id: 'auth-1', status: 'starting', verificationUri: 'https://microsoft.com/devicelogin', userCode: 'ABCD-1234', expiresAt: plusDays(0.05), accountDisplayName: null, accountLoginHint: null, errorCode: null, errorMessage: null, recoveryAction: null }); return }
+if (/outlook\/device-code\/poll$/.test(path)) { ok(res, { id: 'auth-1', status: 'waiting-for-user', verificationUri: 'https://microsoft.com/devicelogin', userCode: 'ABCD-1234', expiresAt: plusDays(0.05), accountDisplayName: null, accountLoginHint: null, errorCode: null, errorMessage: null, recoveryAction: null }); return }
+if (/outlook\/device-code\/[^/]+\/cancel$/.test(path)) { readBody(() => ok(res, '已取消')); return }
+if (path === '/api/v1/calendar/outlook/local-data/preview') { ok(res, { bindingCount: 2, calendarCount: 3, eventCount: 128 }); return }
+if (path === '/api/v1/calendar/outlook/local-data' && req.method === 'DELETE') { ok(res, '已清理'); return }
+if (path === '/api/v1/calendar/outlook/disconnect') { readBody(() => ok(res, '已断开')); return }
+if (path === '/api/v1/calendar/outlook/calendars/discover' || path === '/api/v1/calendar/outlook/calendars') {
+  ok(res, [{ id: 'ob-1', pimCalendarId: 'cal-1', graphCalendarId: 'gcal-1', groupId: 'grp-1', groupName: '我的日历', name: '日历', color: '#3B82F6', ownerName: 'Demo', ownerAddress: 'demo@outlook.com', isDefault: true, canEdit: true, isSelected: true, remoteState: 'active', lastSyncedAt: at(9), lastError: null }])
+  return
+}
+if (path === '/api/v1/calendar/outlook/calendars/selection') { readBody(() => ok(res, [{ id: 'ob-1', pimCalendarId: 'cal-1', graphCalendarId: 'gcal-1', groupId: null, groupName: null, name: '日历', color: null, ownerName: null, ownerAddress: null, isDefault: true, canEdit: true, isSelected: true, remoteState: 'active', lastSyncedAt: null, lastError: null }])); return }
+if (path === '/api/v1/files/sync-batches') {
+  ok(res, { items: [{ id: 'fsb-1', status: 'completed', startedAt: at(9), finishedAt: at(9, 3), pagesProcessed: 12, itemsApplied: 86, itemsDeleted: 2, fullRecrawl: false, errorSummary: null }, { id: 'fsb-2', status: 'completed', startedAt: daysAgo(1), finishedAt: daysAgo(1), pagesProcessed: 8, itemsApplied: 42, itemsDeleted: 0, fullRecrawl: false, errorSummary: null }], total: 2, page: 1, pageSize: 20 })
+  return
+}
+if (/pc\/app-signatures$/.test(path) && req.method === 'POST') { readBody(() => ok(res, { id: 'sig-new' })); return }
 
   json(res, 404, { code: 404, message: `接口不存在: ${path}`, data: null, timestamp: new Date().toISOString() })
 }).listen(5858, () => console.log('mock api on :5858'))
