@@ -16,7 +16,8 @@ import { EventEditorDialog } from '../components/event-editor-dialog'
 import { TaskEditorDialog } from '../components/task-editor-dialog'
 import { InboxPanel } from '../components/inbox-panel'
 import type { EventResponse, LayerItem } from '../types'
-import { dayEndIso, dayStartIso, durationToMinutes, toUtcIso } from '@/lib/datetime'
+import { dayEndIso, dayStartIso, durationToMinutes, formatTime, toUtcIso } from '@/lib/datetime'
+import { summarizeLines } from '@/lib/text'
 import { Chip, Button, Drawer, DrawerContent, PageHeader } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { notifyError, notifySuccess } from '@/lib/notify'
@@ -37,6 +38,19 @@ const LAYER_COLORS: Record<string, string> = {
   habits: '#A855F7',
   availability: '#0EA5E9',
   'ai-placeholders': '#F97316',
+}
+
+/** 闲忙状态 → 中文徽标文案（仅非默认值显示，避免每卡都挂「忙碌」） */
+const SHOW_AS_LABEL: Record<string, string> = {
+  free: '空闲',
+  tentative: '暂定',
+  away: '离开',
+  workingElsewhere: '异地工作',
+}
+
+function showAsLabel(showAs: string | null | undefined): string | null {
+  if (!showAs) return null
+  return SHOW_AS_LABEL[showAs] ?? null
 }
 
 /** 日历页（02 §日历：时间轴/月视图 + 图层 chips + 拖选预填 + 收件箱拖入排期） */
@@ -129,6 +143,26 @@ export function CalendarPage() {
   function onEventClick(arg: EventClickArg) {
     const event = arg.event.extendedProps.event as EventResponse | undefined
     if (event) setEventEditor({ mode: 'edit', event })
+  }
+
+  /*
+   * 卡片内容按可用高度逐级展示。行序号即行名：1=标题、2=pim-ev-when、3..7=描述行。
+   * 两套排版：常规（py 8 + 标题 16 + 其余 12）与紧凑（py 1 + 标题 14 + 其余 11）。
+   * 高度 < 48px 时用紧凑排版，可以多放一行（如 45min 能显示标题+时间+1 行描述）。
+   * 实测：15min≈16px→1 行、30min≈31px→2 行、45min≈46px→3 行、1h≈60px→4 行、100min≈102px→7 行。
+   * 挂载后量一次写入 data-density（应显示行数）与 data-compact（排版档位），
+   * 由皮肤 CSS 同时控制行高与第 n+1 行起的隐藏；
+   * 用 CSS 而非内联 style，可在视图切换/缩放后由 FC 重挂载自然重算。
+   */
+  function onEventDidMount(arg: { el: HTMLElement; view: { type: string } }) {
+    if (arg.view.type.startsWith('dayGrid')) return
+    const h = arg.el.getBoundingClientRect().height
+    const compact = h < 48
+    const rows = compact
+      ? Math.floor((h - 15) / 11) + 1 // 1 + 14 + 11(n-1)
+      : Math.floor((h - 24) / 12) + 1 // 8 + 16 + 12(n-1)
+    if (compact) arg.el.dataset.compact = '1'
+    arg.el.dataset.density = String(Math.max(1, Math.min(7, rows)))
   }
 
   /* 拖选空白时段 → 预填日程编辑弹窗（仅时间轴视图） */
@@ -265,6 +299,7 @@ export function CalendarPage() {
             droppable
             eventReceive={onEventReceive}
             eventClick={onEventClick}
+            eventDidMount={onEventDidMount}
             height="auto"
             stickyHeaderDates
             allDaySlot
@@ -274,11 +309,9 @@ export function CalendarPage() {
             firstDay={1}
             eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
             eventContent={(arg) => {
+              const ev = arg.event.extendedProps.event as EventResponse | undefined
               const cancelled = arg.event.extendedProps.cancelled as boolean | undefined
               const repeated = arg.event.extendedProps.repeated as boolean | undefined
-              const short =
-                arg.event.start && arg.event.end &&
-                arg.event.end.getTime() - arg.event.start.getTime() < 45 * 60_000
               // 月视图：GCal 圆点行（彩点 + 时间 + 标题）
               if (arg.view.type.startsWith('dayGrid')) {
                 return (
@@ -306,27 +339,44 @@ export function CalendarPage() {
                 )
               }
               // 日视图：谷歌竖条（白底左宽条由皮肤 CSS 绘制，这里只排文字）
+              // 顶部对齐；行数由 data-density（eventDidMount 实测高度写入）经 CSS 逐级放开
+              const lines = summarizeLines(ev?.description, { exclude: [ev?.location, ev?.title], maxLines: 5 })
+              const metaLine = [ev?.location, showAsLabel(ev?.showAs)].filter(Boolean).join(' · ')
+              const whenText = arg.timeText || (ev ? formatTime(ev.dtStart) : '')
               return (
-                <div className="flex h-full min-w-0 flex-col justify-center overflow-hidden rounded-[inherit] py-0.5 pr-1.5 pl-1">
+                <div className="flex h-full min-w-0 flex-col overflow-hidden rounded-[inherit] py-1 pr-1.5 pl-1">
                   {cancelled ? (
                     <span className="truncate text-[11px] leading-4 font-medium text-text-4 line-through">
                       {arg.event.title}
                     </span>
                   ) : (
                     <>
-                      {short ? (
-                        <span className="truncate text-[11px] leading-4 font-semibold">
-                          {repeated && <span className="mr-0.5 font-normal text-text-3">↻</span>}
-                          {arg.event.title}
+                      <span className="truncate text-[11px] leading-4 font-semibold">
+                        {repeated && <span className="mr-0.5 font-normal text-text-3">↻</span>}
+                        {arg.event.title}
+                      </span>
+                      {/* 次行：时间始终显示（极矮卡片也不丢时间） */}
+                      {whenText && (
+                        <span className="pim-ev-when tnum truncate text-[10px] leading-3 text-text-3">
+                          {whenText}
+                          {metaLine && <span className="font-sans"> · {metaLine}</span>}
                         </span>
-                      ) : (
-                        <>
-                          <span className="tnum text-[10px] leading-3 text-text-3">{arg.timeText}</span>
-                          <span className="truncate text-[11px] leading-4 font-semibold">
-                            {repeated && <span className="mr-0.5 font-normal text-text-3">↻</span>}
-                            {arg.event.title}
-                          </span>
-                        </>
+                      )}
+                      {/* 第三行起：描述逐行展示，行数越多放开越多 */}
+                      {lines[0] && (
+                        <span className="pim-ev-row3 truncate text-[10px] leading-3 text-text-4">{lines[0]}</span>
+                      )}
+                      {lines[1] && (
+                        <span className="pim-ev-row4 truncate text-[10px] leading-3 text-text-4">{lines[1]}</span>
+                      )}
+                      {lines[2] && (
+                        <span className="pim-ev-row5 truncate text-[10px] leading-3 text-text-4">{lines[2]}</span>
+                      )}
+                      {lines[3] && (
+                        <span className="pim-ev-row6 truncate text-[10px] leading-3 text-text-4">{lines[3]}</span>
+                      )}
+                      {lines[4] && (
+                        <span className="pim-ev-row7 truncate text-[10px] leading-3 text-text-4">{lines[4]}</span>
                       )}
                     </>
                   )}

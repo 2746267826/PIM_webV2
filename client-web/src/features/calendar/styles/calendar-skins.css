@@ -211,6 +211,33 @@
 .skin-gcal .fc-event-title {
   font-weight: 600;
 }
+/* 卡片内容顶部对齐；data-density = 该卡可容纳的总行数（eventDidMount 按实测高度写入），
+   第 n+1 行起整体隐藏。用 :nth-child 而非逐行类名，可自适应「某行无内容而未渲染」的情况：
+   计数的是实际渲染出的行，因此 density=3 恒等于「显示前 3 行」。 */
+.skin-gcal .fc-timegrid-event .fc-event-main {
+  align-items: stretch;
+  justify-content: flex-start;
+}
+.skin-gcal .fc-timegrid-event[data-density='1'] .fc-event-main > div > span:nth-child(n + 2),
+.skin-gcal .fc-timegrid-event[data-density='2'] .fc-event-main > div > span:nth-child(n + 3),
+.skin-gcal .fc-timegrid-event[data-density='3'] .fc-event-main > div > span:nth-child(n + 4),
+.skin-gcal .fc-timegrid-event[data-density='4'] .fc-event-main > div > span:nth-child(n + 5),
+.skin-gcal .fc-timegrid-event[data-density='5'] .fc-event-main > div > span:nth-child(n + 6),
+.skin-gcal .fc-timegrid-event[data-density='6'] .fc-event-main > div > span:nth-child(n + 7) {
+  display: none;
+}
+/* 紧凑排版（data-compact，<48px 的卡片）：py 从 8px 收到 1px，行高 16/12 → 14/11，
+   使 30min≈31px 能显示 2 行、45min≈46px 能显示 3 行，且标题不被裁切。 */
+.skin-gcal .fc-timegrid-event[data-compact] .fc-event-main > div {
+  padding-top: 1px;
+  padding-bottom: 0;
+}
+.skin-gcal .fc-timegrid-event[data-compact] .fc-event-main > div > span:first-child {
+  line-height: 14px;
+}
+.skin-gcal .fc-timegrid-event[data-compact] .fc-event-main > div > span:nth-child(n + 2) {
+  line-height: 11px;
+}
 /* 月视图事件：GCal 圆点行（FC list-item 自带点，点色 = --fc-event-bg-color） */
 .skin-gcal .fc-daygrid-event {
   background: transparent !important;
