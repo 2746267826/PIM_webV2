@@ -58,17 +58,27 @@ export function TasksPage() {
   const [segmentsTask, setSegmentsTask] = useState<TaskResponse | null>(null)
 
   const { data: taskBooks = [] } = useTaskBooks()
+  /*
+   * 注意：GET /calendar/tasks 没有 taskBookId 查询参数（规格 calendar.md:312-328），
+   * 其 calendarId 语义是「按日历过滤」——把任务本 ID 传进去会得到空结果。
+   * 因此任务本筛选在客户端进行（URL 仍以 ?taskBookId= 记录状态）。
+   */
   const query = useMemo(
     () => ({
       ...quickToParams(quick),
       search: search || undefined,
-      calendarId: taskBookId,
       page,
       pageSize: 100,
     }),
-    [quick, search, taskBookId, page],
+    [quick, search, page],
   )
-  const { data, isLoading } = useTasksPaged(query)
+  const tasksQuery = useTasksPaged(query)
+  const data = useMemo(() => {
+    if (taskBookId == null) return tasksQuery.data
+    const items = (tasksQuery.data?.items ?? []).filter((t) => t.taskBookId === taskBookId)
+    return { items, totalCount: items.length, page: 1, pageSize: items.length, totalPages: 1 }
+  }, [tasksQuery.data, taskBookId])
+  const isLoading = tasksQuery.isLoading
   const batchDelete = useBatchDeleteTasks()
   const toggleComplete = useToggleTaskComplete()
 

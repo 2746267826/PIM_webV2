@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import 'leaflet/dist/leaflet.css'
-import { Crosshair } from 'lucide-react'
+import { Crosshair, RefreshCw } from 'lucide-react'
 import { MapContainer, Polyline, TileLayer, CircleMarker, useMap } from 'react-leaflet'
 import { useFrequentPlaces, useLocationOverview, useMovementStats, useTracks } from '../queries'
 import { mobileApi } from '../api'
@@ -31,8 +31,9 @@ export function LocationHistoryPage() {
   const [days, setDays] = useState<RangeDays>(7)
   const params = useMemo(() => rangeFor(days), [days])
 
-  const overview = useLocationOverview(params)
-  const tracks = useTracks(params)
+  const [force, setForce] = useState(false)
+  const overview = useLocationOverview(params, force)
+  const tracks = useTracks(params, force)
   const places = useFrequentPlaces(params)
   const movement = useMovementStats(params)
 
@@ -54,6 +55,18 @@ export function LocationHistoryPage() {
             {RANGE_OPTS.map((r) => (
               <Chip key={r.d} active={days === r.d} onClick={() => { setDays(r.d); setActiveSegment(null) }}>{r.label}</Chip>
             ))}
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={force}
+              onClick={() => {
+                setForce(true)
+                setTimeout(() => setForce(false), 1200)
+              }}
+              title="穿透服务端聚合缓存重新计算"
+            >
+              <RefreshCw className="size-3.5" aria-hidden /> 强制刷新
+            </Button>
           </>
         }
       />

@@ -225,6 +225,12 @@ export function TaskEditorDialog({ open, onOpenChange, taskBooks, task, initialP
                 <span className="text-xs font-medium text-text-3">检查清单</span>
                 <span className="h-px flex-1 bg-divider" />
               </div>
+              {checklistItems.length === 0 && (
+                <p className="text-[11px] text-text-4">
+                  后端 TaskResponse 不返回清单项、也没有清单读取端点（规格 calendar.md:353、495-501）：
+                  此处仅可新增；已存条目需在后续版本由后端补齐读取端点后展示。
+                </p>
+              )}
               <div className="space-y-1.5">
                 {checklistItems.map((item) => (
                   <div key={item.id} className="group flex items-center gap-2">

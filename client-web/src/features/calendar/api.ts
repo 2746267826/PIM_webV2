@@ -159,8 +159,9 @@ export interface ScheduleSlot {
 }
 
 export const scheduleApi = {
+  /** 排程引擎：响应 data 是 ScheduleSolution[]（数组，非对象） */
   run: (taskIds: string[]) =>
-    apiPost<{ algorithmName: string; slots: ScheduleSlot[]; metrics: Record<string, unknown> }>(
+    apiPost<{ algorithmName: string; slots: ScheduleSlot[]; metrics: Record<string, unknown> }[]>(
       '/api/v1/calendar/schedule',
       { taskIds },
     ),

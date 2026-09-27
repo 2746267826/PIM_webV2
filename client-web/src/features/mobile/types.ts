@@ -60,7 +60,28 @@ export interface MobileTimelineBlock {
   topApps: { packageName: string; displayName: string; foregroundSeconds: number }[]
 }
 
-export interface MobileDevice {
+/** GET /mobile/devices 的元素（MobileDeviceDto，规格 mobile.md:19-38） */
+export interface MobileDeviceDto {
+  id: string
+  deviceId: string
+  androidIdHash: string | null
+  displayName: string
+  manufacturer: string
+  brand: string
+  model: string
+  androidVersion: string
+  sdkInt: number
+  appVersion: string
+  metadataJson: string
+  firstSeenAt: string
+  lastSeenAt: string
+  lastHeartbeatAt: string | null
+  lastSyncAt: string | null
+  isActive: boolean
+}
+
+/** GET /mobile/devices/manage 的元素（DeviceListDto，规格 mobile.md:49-69） */
+export interface DeviceListItem {
   deviceId: string
   displayName: string
   brand: string
@@ -73,6 +94,9 @@ export interface MobileDevice {
   sessionCount: number
   eventCount: number
   locationCount: number
+  summaryCount: number
+  earliest: string | null
+  latest: string | null
   storageEstimateKb: number
   syncStatus: string
   dataQuality: string

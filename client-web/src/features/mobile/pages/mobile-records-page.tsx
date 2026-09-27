@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { RefreshCw, Smartphone } from 'lucide-react'
+import { ChevronRight, RefreshCw, Smartphone } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   useLiveness,
@@ -78,10 +78,11 @@ function UsageView({ days, setDays, range }: { days: RangeKey; setDays: (d: Rang
   const [page, setPage] = useState(1)
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  const overview = useMobileOverview({ ...range, force: force || undefined })
-  const heatmap = useMobileHeatmap({ ...range, granularity: 'hour' })
-  const charts = useMobileCharts(range)
-  const blocks = useTimelineBlocks({ ...range, page, pageSize: 20 })
+  const forceParam = force ? { force: true } : {}
+  const overview = useMobileOverview({ ...range, ...forceParam })
+  const heatmap = useMobileHeatmap({ ...range, granularity: 'hour', ...forceParam })
+  const charts = useMobileCharts({ ...range, ...forceParam })
+  const blocks = useTimelineBlocks({ ...range, page, pageSize: 20, ...forceParam })
 
   const o = overview.data
   const [refreshing, setRefreshing] = useState(false)
@@ -240,6 +241,8 @@ function UsageView({ days, setDays, range }: { days: RangeKey; setDays: (d: Rang
 function BlockSessions({ blockId, range }: { blockId: string; range: Record<string, string> }) {
   const [loaded, setLoaded] = useState(false)
   const [sessions, setSessions] = useState<{ id: string; displayName: string; startUtc: string; endUtc: string | null; durationSeconds: number }[] | null>(null)
+  /* 三级下钻：块 → 会话 → 原始事件 */
+  const [eventSession, setEventSession] = useState<string | null>(null)
 
   if (!loaded) {
     setLoaded(true)
@@ -258,10 +261,19 @@ function BlockSessions({ blockId, range }: { blockId: string; range: Record<stri
       ) : (
         <ul className="space-y-1">
           {sessions.map((s) => (
-            <li key={s.id} className="flex items-center gap-2 text-xs">
-              <span className="min-w-0 flex-1 truncate text-text-2">{s.displayName}</span>
-              <span className="tnum text-text-4">{formatTime(s.startUtc)}</span>
-              <span className="tnum text-text-3">{formatDuration(s.durationSeconds)}</span>
+            <li key={s.id}>
+              <button
+                type="button"
+                onClick={() => setEventSession(s.id === eventSession ? null : s.id)}
+                className="flex w-full items-center gap-2 rounded-ctl px-1 py-0.5 text-left text-xs outline-none hover:bg-surface-2"
+                title="点击查看会话原始事件"
+              >
+                <span className="min-w-0 flex-1 truncate text-text-2">{s.displayName}</span>
+                <span className="tnum text-text-4">{formatTime(s.startUtc)}</span>
+                <span className="tnum text-text-3">{formatDuration(s.durationSeconds)}</span>
+                <ChevronRight className={cn('size-3 shrink-0 text-text-4 transition-transform', s.id === eventSession && 'rotate-90')} aria-hidden />
+              </button>
+              {s.id === eventSession && <SessionEvents sessionId={s.id} />}
             </li>
           ))}
         </ul>
@@ -272,6 +284,34 @@ function BlockSessions({ blockId, range }: { blockId: string; range: Record<stri
 
 /** 分类色序列（服务端未给 lifeCategory 时按序取用，保证多色可辨） */
 const CATEGORY_FALLBACK_PALETTE = ['#2563EB', '#16A34A', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#64748B']
+
+/** 会话原始事件（三级下钻最内层，规格 mobile.md:915） */
+function SessionEvents({ sessionId }: { sessionId: string }) {
+  const [events, setEvents] = useState<{ id: string; eventType: string; eventTimeUtc: string; className: string | null }[] | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void mobileApi
+      .sessionEvents(sessionId)
+      .then((res) => !cancelled && setEvents(res))
+      .catch(() => !cancelled && setEvents([]))
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId])
+
+  if (events == null) return <div className="px-2 py-1"><Skeleton className="h-6" /></div>
+  if (events.length === 0) return <p className="px-2 py-1 text-[11px] text-text-4">无事件明细</p>
+  return (
+    <ul className="ml-3 space-y-0.5 border-l border-divider pl-2">
+      {events.map((e) => (
+        <li key={e.id} className="flex items-center gap-2 text-[11px]">
+          <span className="mono text-text-3">{e.eventType}</span>
+          <span className="tnum ml-auto text-text-4">{formatTime(e.eventTimeUtc)}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 /** 服务端图表 DTO → ECharts option */
 function chartToOption(c: { chartType: string; points: { label: string; value: number; lifeCategory?: string | null }[] }) {

@@ -359,3 +359,26 @@ export interface TasksPagedParams {
 }
 
 export type { PagedResult }
+
+
+/**
+ * 任务 → PUT/POST 请求体（整体替换式端点的必备适配，规格 calendar.md:379-391）。
+ * PUT /calendar/tasks/{id} 会把 title/description/priority/due/时长/dtStart 全部按请求写入，
+ * 任何部分更新（如仅切换完成状态）都必须先补齐当前值，否则字段被清空。
+ */
+export function taskToMutationData(task: TaskResponse): Record<string, unknown> {
+  return {
+    title: task.title,
+    description: task.description,
+    priority: task.priority,
+    due: task.due,
+    dtStart: task.dtStart,
+    plannedEnd: task.plannedEnd,
+    estimatedDuration: task.estimatedDuration,
+    minimumSegment: task.minimumSegment,
+    status: task.status,
+    percentComplete: task.percentComplete,
+    taskBookId: task.taskBookId,
+    calendarId: task.calendarId,
+  }
+}

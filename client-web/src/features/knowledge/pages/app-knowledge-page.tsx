@@ -436,7 +436,7 @@ function CategoryEditor({ node, parentId, onDone }: { node: CategoryNode | null;
 
   const save = useMutation({
     mutationFn: () =>
-      apiPost<CategoryNode>('/api/v1/pc/categories', {
+      apiPost<CategoryNode>('/api/v1/pc/categories/', {
         id: node?.id,
         parentId: node?.id ? node.parentId : parentId,
         name: name.trim(),
@@ -453,7 +453,7 @@ function CategoryEditor({ node, parentId, onDone }: { node: CategoryNode | null;
   })
 
   const addChild = useMutation({
-    mutationFn: () => apiPost<CategoryNode>('/api/v1/pc/categories', { parentId: node?.id ?? null, name: '新子分类', color, productivity: 'neutral' }),
+    mutationFn: () => apiPost<CategoryNode>('/api/v1/pc/categories/', { parentId: node?.id ?? null, name: '新子分类', color, productivity: 'neutral' }),
     onSuccess: () => {
       notifySuccess('已添加子分类')
       qc.invalidateQueries({ queryKey: ['knowledge'] })

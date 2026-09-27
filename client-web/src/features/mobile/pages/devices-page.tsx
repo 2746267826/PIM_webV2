@@ -4,7 +4,8 @@ import { Download, GitMerge, Pencil, Trash2 } from 'lucide-react'
 import { useDeviceActions, useMobileDevices } from '../queries'
 import { mobileApi } from '../api'
 import { formatTime } from '@/lib/datetime'
-import { downloadJson } from '@/lib/download'
+import { notifyError, notifySuccess } from '@/lib/notify'
+import { downloadBlob } from '@/lib/download'
 import { Button, Card, CardTitle, ConfirmDialog, Dialog, DialogContent, EmptyState, PageHeader, Segmented, StatusBadge } from '@/components/ui'
 import type { DeviceDeletePreview } from '../types'
 
@@ -149,8 +150,16 @@ export function DevicesPage() {
                   variant="ghost"
                   size="sm"
                   onClick={async () => {
-                    const data = await mobileApi.exportDevice(d.deviceId)
-                    downloadJson(`pim-export-${d.displayName}-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data))
+                    try {
+                      const { blob } = await mobileApi.exportDeviceBlob(d.deviceId)
+                      downloadBlob(
+                        `pim-export-${d.displayName}-${new Date().toISOString().slice(0, 10)}.json`,
+                        blob,
+                      )
+                      notifySuccess('已导出（含各表最新 5000 条）')
+                    } catch (err) {
+                      notifyError(err instanceof Error ? err.message : '导出失败')
+                    }
                   }}
                 >
                   <Download className="size-3.5" aria-hidden /> 导出

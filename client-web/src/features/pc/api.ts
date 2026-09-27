@@ -28,24 +28,74 @@ export interface AppKnowledgePreview {
 export const pcApi = {
   summary: (date: string, force = false) =>
     apiGet<PcSummaryResponse>(`/api/v1/pc/summary?date=${date}${force ? '&force=true' : ''}`),
-  heatmapGrid: (params: { start: string; end: string; dimension: string }) =>
+  heatmapGrid: (params: { start: string; end: string; dimension: string; force?: boolean }) =>
     apiGet<import('./types').HeatmapGridResponse>(
-      `/api/v1/pc/heatmap/grid?start=${params.start}&end=${params.end}&dimension=${params.dimension}`,
+      `/api/v1/pc/heatmap/grid?start=${params.start}&end=${params.end}&dimension=${params.dimension}${params.force ? '&force=true' : ''}`,
     ),
-  activityAnalysis: (date: string, blockMinutes = 60) =>
-    apiGet<PcActivityAnalysis>(`/api/v1/pc/activity-analysis?date=${date}&blockMinutes=${blockMinutes}`),
-  appUsage: (date: string, limit = 8) =>
-    apiGet<{ items: PcAppUsageItem[]; totalMinutes: number }>(
-      `/api/v1/pc/aggregation/app-usage?date=${date}&limit=${limit}`,
+  activityAnalysis: (date: string, blockMinutes = 60, force = false) =>
+    apiGet<PcActivityAnalysis>(
+      `/api/v1/pc/activity-analysis?date=${date}&blockMinutes=${blockMinutes}${force ? '&force=true' : ''}`,
     ),
-  categoryDistribution: (date: string) =>
-    apiGet<{ items: PcCategoryDistributionItem[] }>(`/api/v1/pc/aggregation/category-distribution?date=${date}`),
-  productivity: (date: string) =>
-    apiGet<ProductivityDashboard>(`/api/v1/pc/productivity/dashboard?date=${date}`),
+  /** 聚合组公共参数（date 或 start/end 二选一 + timezone + force） */
+  appUsage: (params: { date?: string; start?: string; end?: string; timezone?: string; limit?: number; force?: boolean }) => {
+    const q = new URLSearchParams()
+    if (params.date) q.set('date', params.date)
+    if (params.start) q.set('start', params.start)
+    if (params.end) q.set('end', params.end)
+    if (params.timezone) q.set('timezone', params.timezone)
+    if (params.limit) q.set('limit', String(params.limit))
+    if (params.force) q.set('force', 'true')
+    return apiGet<{ items: PcAppUsageItem[]; totalMinutes: number }>(`/api/v1/pc/aggregation/app-usage?${q}`)
+  },
+  categoryDistribution: (params: { date?: string; start?: string; end?: string; timezone?: string; force?: boolean }) => {
+    const q = new URLSearchParams()
+    if (params.date) q.set('date', params.date)
+    if (params.start) q.set('start', params.start)
+    if (params.end) q.set('end', params.end)
+    if (params.timezone) q.set('timezone', params.timezone)
+    if (params.force) q.set('force', 'true')
+    return apiGet<{ items: PcCategoryDistributionItem[] }>(`/api/v1/pc/aggregation/category-distribution?${q}`)
+  },
+  /** 专注块（02 §pc-tracker：今日页 PC 概览 / PC 追踪总览页使用） */
+  focusBlocks: (params: { date?: string; start?: string; end?: string; timezone?: string; force?: boolean }) => {
+    const q = new URLSearchParams()
+    if (params.date) q.set('date', params.date)
+    if (params.start) q.set('start', params.start)
+    if (params.end) q.set('end', params.end)
+    if (params.timezone) q.set('timezone', params.timezone)
+    if (params.force) q.set('force', 'true')
+    return apiGet<{ items: { startUtc: string; endUtc: string; startLocal: string; endLocal: string; durationMinutes: number; mainApp: string; topApps: { name: string; minutes: number }[] }[] }>(
+      `/api/v1/pc/aggregation/focus-blocks?${q}`,
+    )
+  },
+  /** 深夜使用（按业务日） */
+  lateNight: (params: { date?: string; start?: string; end?: string; timezone?: string; force?: boolean }) => {
+    const q = new URLSearchParams()
+    if (params.date) q.set('date', params.date)
+    if (params.start) q.set('start', params.start)
+    if (params.end) q.set('end', params.end)
+    if (params.timezone) q.set('timezone', params.timezone)
+    if (params.force) q.set('force', 'true')
+    return apiGet<{ items: { date: string; minutes: number; hadActivity: boolean }[] }>(
+      `/api/v1/pc/aggregation/late-night?${q}`,
+    )
+  },
+  productivity: (date: string, force = false) =>
+    apiGet<ProductivityDashboard>(`/api/v1/pc/productivity/dashboard?date=${date}${force ? '&force=true' : ''}`),
   classificationQueue: (limit: number, mode = 'queue') =>
     apiGet<{ items: LabelingQueueItem[] }>(`/api/v1/pc/classification/queue?limit=${limit}&mode=${mode}`),
-  label: (body: { targetType: string; target: string; categoryName?: string; categoryId?: string; scope: 'all' | 'keyword' }) =>
-    apiPost<{ ok: boolean; categoryName: string | null; created: string }>('/api/v1/pc/classification/label', body),
+  label: (body: {
+    targetType: string
+    target: string
+    categoryName?: string
+    categoryId?: string
+    scope: 'all' | 'keyword'
+    /** scope=keyword 时必填（规格 pc-tracker.md:700-711） */
+    keyword?: string
+  }) => apiPost<{ ok: boolean; categoryId: string | null; categoryName: string | null; created: string }>(
+    '/api/v1/pc/classification/label',
+    body,
+  ),
   categoryDictionary: () => apiGet<CategoryDictionaryItem[]>('/api/v1/pc/categories/dictionary'),
 
   /** 浏览器站点（browser-tt） */

@@ -8,9 +8,11 @@ import {
   useAppUsage,
   useCategoryDictionary,
   useCategoryDistribution,
+  useFocusBlocks,
   useHeatmapGrid,
   useLabelMutation,
   useLabelingQueue,
+  useLateNight,
   usePcSummary,
   useProductivity,
   useSuggestionActions,
@@ -19,6 +21,7 @@ import {
 import { todayBusinessDay, businessDayShift } from '@/lib/businessDay'
 import { formatRange } from '@/lib/datetime'
 import { Button, Card, CardTitle, Chip, EmptyState, Input, PageHeader, Segmented, Skeleton, StatusBadge } from '@/components/ui'
+import { RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { notifyError, notifySuccess } from '@/lib/notify'
 
@@ -28,12 +31,16 @@ type Dimension = 'hour' | 'day' | 'month' | 'year'
 export function PcTrackerPage() {
   const date = todayBusinessDay()
   const [dimension, setDimension] = useState<Dimension>('day')
+  /* 强制刷新：穿透服务端聚合缓存（force=true，规格 04 §7） */
+  const [force, setForce] = useState(false)
 
-  const { data: summary, isLoading } = usePcSummary(date)
-  const { data: activity } = useActivityAnalysis(date)
+  const { data: summary, isLoading } = usePcSummary(date, force)
+  const { data: activity } = useActivityAnalysis(date, true, force)
   const { data: appUsage } = useAppUsage(date)
   const { data: categories } = useCategoryDistribution(date)
-  const { data: productivity } = useProductivity(date)
+  const { data: productivity } = useProductivity(date, true, force)
+  const focusBlocks = useFocusBlocks(date)
+  const lateNight = useLateNight(date)
   const { data: suggestions = [] } = useContextSuggestions(date)
 
   /* 维度热力：day=近 7 天、month=近 12 周、year=近 5 年 */
@@ -41,7 +48,7 @@ export function PcTrackerPage() {
     const days = dimension === 'day' ? 7 : dimension === 'month' ? 84 : 1825
     return { start: businessDayShift(date, -days + 1), end: date }
   }, [dimension, date])
-  const { data: heatGrid } = useHeatmapGrid(heatRange.start, heatRange.end, dimension)
+  const { data: heatGrid } = useHeatmapGrid(heatRange.start, heatRange.end, dimension, true, force)
 
   /* 甘特时间线段 */
   const ganttSegments = useMemo(
@@ -134,12 +141,26 @@ export function PcTrackerPage() {
         title="电脑记录"
         subtitle={`业务日 ${date}（04:00 起算）`}
         actions={
-          <Segmented
-            size="sm"
-            value={dimension}
-            onValueChange={(v) => setDimension(v)}
-            options={(['hour', 'day', 'month', 'year'] as Dimension[]).map((d) => ({ value: d, label: { hour: '时', day: '日', month: '月', year: '年' }[d] }))}
-          />
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={force}
+              onClick={() => {
+                setForce(true)
+                setTimeout(() => setForce(false), 1200)
+              }}
+              title="穿透服务端聚合缓存重新计算"
+            >
+              <RefreshCw className="size-4" aria-hidden /> 强制刷新
+            </Button>
+            <Segmented
+              size="sm"
+              value={dimension}
+              onValueChange={(v) => setDimension(v)}
+              options={(['hour', 'day', 'month', 'year'] as Dimension[]).map((d) => ({ value: d, label: { hour: '时', day: '日', month: '月', year: '年' }[d] }))}
+            />
+          </>
         }
       />
 
@@ -155,6 +176,44 @@ export function PcTrackerPage() {
           <SummaryTile label="待处理建议" value={String(suggestions.filter((s) => s.status === 'pending').length)} warn={suggestions.some((s) => s.status === 'pending')} />
         </div>
       )}
+
+      {/* 专注块 + 深夜使用（规格要求由本页消费） */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Card className="p-4">
+          <CardTitle>专注块</CardTitle>
+          <div className="mt-2 space-y-1.5">
+            {(focusBlocks.data?.items?.length ?? 0) === 0 ? (
+              <p className="py-3 text-center text-[13px] text-text-4">当日暂无连续专注时段</p>
+            ) : (
+              focusBlocks.data!.items.slice(0, 6).map((b) => (
+                <div key={b.startUtc} className="flex items-center gap-3 text-[13px]">
+                  <span className="tnum shrink-0 text-text-3">{b.startLocal}–{b.endLocal}</span>
+                  <span className="min-w-0 flex-1 truncate text-text-1">{b.mainApp}</span>
+                  <span className="tnum shrink-0 text-text-3">{b.durationMinutes} 分钟</span>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+        <Card className="p-4">
+          <CardTitle>深夜使用</CardTitle>
+          <div className="mt-2 space-y-1.5">
+            {(lateNight.data?.items?.length ?? 0) === 0 ? (
+              <p className="py-3 text-center text-[13px] text-text-4">暂无数据</p>
+            ) : (
+              lateNight.data!.items.slice(0, 6).map((d) => (
+                <div key={d.date} className="flex items-center gap-3 text-[13px]">
+                  <span className="tnum shrink-0 text-text-3">{d.date}</span>
+                  <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-2">
+                    <div className="h-full rounded-full bg-warn" style={{ width: `${Math.min(100, d.minutes)}%` }} />
+                  </div>
+                  <span className={cn('tnum shrink-0', d.minutes > 0 ? 'text-warn' : 'text-text-4')}>{d.minutes} 分钟</span>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      </div>
 
       {/* 分类时间线（甘特） */}
       <Card className="p-4">
@@ -264,10 +323,10 @@ export function PcTrackerPage() {
           <KeyboardMatrix keyCounts={ks?.keyPressCounts ?? {}} />
           <MouseHeatmap
             left={ks?.leftClicks ?? 0}
-            middle={0}
+            middle={ks?.middleClicks ?? 0}
             right={ks?.rightClicks ?? 0}
-            sideBack={0}
-            sideForward={0}
+            sideBack={ks?.sideBackClicks ?? 0}
+            sideForward={ks?.sideForwardClicks ?? 0}
             scrollDistance={ks?.scrollDistance}
           />
         </div>

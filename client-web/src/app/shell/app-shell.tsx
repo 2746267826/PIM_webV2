@@ -12,6 +12,7 @@ import { GlobalFab } from './global-fab'
 import { SidebarContent } from './sidebar'
 import { useSidebarCollapsed } from './use-sidebar-collapsed'
 import { CalendarVisibilityProvider } from '@/features/calendar/calendar-visibility'
+import { GlobalEditorsProvider } from './global-editors'
 
 /** 页脚：本地版本 / API 版本 / "有可用更新"标记 / 当前服务器 */
 function AppFooter() {
@@ -50,6 +51,7 @@ export function AppShell() {
 
   return (
     <CalendarVisibilityProvider>
+      <GlobalEditorsProvider>
       <div className="flex min-h-dvh flex-col">
       {/* 移动顶条 */}
       <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-bg px-3 md:hidden">
@@ -101,6 +103,7 @@ export function AppShell() {
         </DrawerContent>
       </Drawer>
       </div>
+      </GlobalEditorsProvider>
     </CalendarVisibilityProvider>
   )
 }

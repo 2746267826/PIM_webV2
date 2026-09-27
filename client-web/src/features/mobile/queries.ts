@@ -31,6 +31,7 @@ export function useMobileHeatmap(params: Record<string, unknown>) {
   })
 }
 
+/** 图表网格（复用同一查询参数组，含 force 语义） */
 export function useMobileCharts(params: Record<string, unknown>) {
   return useQuery({
     queryKey: mobileKeys.charts(params),
@@ -62,18 +63,18 @@ export function useLiveness(params: Record<string, unknown>, enabled: boolean) {
   })
 }
 
-export function useLocationOverview(params: Record<string, unknown>) {
+export function useLocationOverview(params: Record<string, unknown>, force = false) {
   return useQuery({
-    queryKey: mobileKeys.locationOverview(params),
-    queryFn: () => mobileApi.locationOverview(params),
+    queryKey: [...mobileKeys.locationOverview(params), force],
+    queryFn: () => mobileApi.locationOverview({ ...params, ...(force ? { force: true } : {}) }),
     refetchInterval: () => deferredIntervalMs(),
   })
 }
 
-export function useTracks(params: Record<string, unknown>) {
+export function useTracks(params: Record<string, unknown>, force = false) {
   return useQuery({
-    queryKey: mobileKeys.tracks(params),
-    queryFn: () => mobileApi.tracks(params),
+    queryKey: [...mobileKeys.tracks(params), force],
+    queryFn: () => mobileApi.tracks({ ...params, ...(force ? { force: true } : {}) }),
     refetchInterval: () => deferredIntervalMs(),
   })
 }

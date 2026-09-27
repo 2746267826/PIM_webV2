@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 import { statusApi } from '../api'
+import { mobileApi } from '@/features/mobile/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { formatTime } from '@/lib/datetime'
 import { HEALTH_LABEL, normalizeHealthStatus } from '@/lib/enums'
@@ -22,6 +23,8 @@ export function StatusPage() {
   const tracker = useQuery({ queryKey: ['status', 'tracker'], queryFn: statusApi.trackerHealth, retry: false, meta: { silent: true } })
   const daemons = useQuery({ queryKey: ['status', 'daemons'], queryFn: statusApi.daemonHeartbeats, retry: false, meta: { silent: true } })
   const mobileQuality = useQuery({ queryKey: ['status', 'mobile-quality'], queryFn: () => statusApi.mobileQuality(), retry: false, meta: { silent: true } })
+  /* 移动设备（与守护心跳合并为一个设备列表，规格 operations-status.md:371） */
+  const mobileDevices = useQuery({ queryKey: ['status', 'mobile-devices'], queryFn: mobileApi.devices, retry: false, meta: { silent: true } })
 
   const summary = detail.data?.summary
   const tone = summary ? STATUS_TONE[normalizeHealthStatus(summary.status)] : 'neutral'
@@ -141,9 +144,24 @@ export function StatusPage() {
               </p>
             </div>
           ))}
-          {(daemons.data?.length ?? 0) === 0 && (
+          {(mobileDevices.data ?? []).map((d) => (
+            <div key={d.deviceId} className="rounded-card border border-border p-3">
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-text-1">{d.displayName}</span>
+                <StatusBadge tone={d.isActive ? 'ok' : 'neutral'} dot={false}>{d.isActive ? '活跃' : '离线'}</StatusBadge>
+              </div>
+              <p className="mono mt-1 truncate text-[11px] text-text-4">
+                {d.brand} {d.model} · Android {d.androidVersion}（API {d.sdkInt}）
+              </p>
+              <p className="mt-1 text-[11px] text-text-3">
+                <span className="tnum">客户端 {d.appVersion}</span>
+                <span className="tnum ml-2">最近活跃 {formatTime(d.lastSeenAt)}</span>
+              </p>
+            </div>
+          ))}
+          {(daemons.data?.length ?? 0) + (mobileDevices.data?.length ?? 0) === 0 && (
             <div className="col-span-full">
-              <EmptyState size="sm" title="没有在线的 Windows 工作站" />
+              <EmptyState size="sm" title="没有已连接的设备" description="Windows 工作站与 Android 设备上报后会出现在这里。" />
             </div>
           )}
         </div>

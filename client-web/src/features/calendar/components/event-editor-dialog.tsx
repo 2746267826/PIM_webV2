@@ -121,7 +121,8 @@ export function EventEditorDialog({ open, onOpenChange, calendars, initial, even
     },
   })
 
-  const editableCalendars = useMemo(() => calendars.filter((c) => c.canEdit || !isOutlook), [calendars, isOutlook])
+  /* 不可编辑日历（含只读 Outlook 绑定）在新建与编辑时都不可选 */
+  const editableCalendars = useMemo(() => calendars.filter((c) => c.canEdit), [calendars])
 
   useEffect(() => {
     if (!open) return
@@ -211,7 +212,37 @@ export function EventEditorDialog({ open, onOpenChange, calendars, initial, even
         : null,
       attendees: attendees.filter((a) => a.name || a.email).map((a) => ({ name: a.name || undefined, email: a.email || undefined, type: a.type })),
     }
+    // 目标日历是否为 Outlook 绑定（新建时也需判定：直接 POST 会被后端拒 02009）
+    const targetCalendar = calendars.find((c) => c.id === values.calendarId)
+    const targetIsOutlook = targetCalendar?.outlookCalendarBindingId != null || targetCalendar?.source === 'outlook'
     try {
+      if (!isEdit && targetIsOutlook) {
+        const result = await apiPost<{ status: string; event: EventResponse | null; errorCode: string | null; errorMessage: string | null }>(
+          '/api/v1/calendar/outlook/events/writeback',
+          {
+            operation: 'create',
+            calendarBindingId: targetCalendar?.outlookCalendarBindingId,
+            draft: { ...body, uid: crypto.randomUUID() },
+            scope: 'instance',
+            clientOperationId: crypto.randomUUID(),
+          },
+          { allowStatuses: [409, 412] },
+        )
+        if (result.status === 'conflict') {
+          setConflict({ message: result.errorMessage ?? '创建冲突：服务器已有同源事件。' })
+          return
+        }
+        if (result.status === 'reauth-required') {
+          setError('Outlook 连接需要重新授权（设置 → Microsoft 账户）')
+          return
+        }
+        if (result.status === 'error') {
+          setError(result.errorMessage ?? 'Outlook 写回失败')
+          return
+        }
+        onOpenChange(false)
+        return
+      }
       if (isEdit && event) {
         if (isOutlook) {
           const result = await apiPost<{ status: string; latestEvent: EventResponse | null; errorCode: string | null; errorMessage: string | null }>(
@@ -238,6 +269,10 @@ export function EventEditorDialog({ open, onOpenChange, calendars, initial, even
           }
           if (result.status === 'reauth-required') {
             setError('Outlook 连接需要重新授权（设置 → Microsoft 账户）')
+            return
+          }
+          if (result.status === 'error') {
+            setError(result.errorMessage ?? 'Outlook 写回失败')
             return
           }
         } else {

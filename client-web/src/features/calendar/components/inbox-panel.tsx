@@ -44,11 +44,18 @@ export function InboxPanel({ onNewTask, onNewEvent, className }: InboxPanelProps
     }
     setRescheduling(true)
     try {
-      const solution = await scheduleApi.run(candidates.map((t) => t.id))
-      for (const slot of solution.slots) {
+      const solutions = await scheduleApi.run(candidates.map((t) => t.id))
+      // 响应为多算法方案数组：取首个含槽位的方案（greedy 优先）
+      const solution = solutions.find((sol) => sol.slots.length > 0) ?? solutions[0]
+      const slots = solution?.slots ?? []
+      if (slots.length === 0) {
+        notifyError('排程引擎未给出可用时间槽')
+        return
+      }
+      for (const slot of slots) {
         await tasksApi.plan(slot.taskId, { plannedStart: slot.start, plannedEnd: slot.end })
       }
-      notifySuccess(`已重排 ${solution.slots.length} 个任务`)
+      notifySuccess(`已重排 ${slots.length} 个任务（${solution.algorithmName}）`)
     } catch (err) {
       notifyError(err instanceof Error ? err.message : '一键重排失败')
     } finally {
@@ -92,13 +99,8 @@ export function InboxPanel({ onNewTask, onNewEvent, className }: InboxPanelProps
               <li
                 key={task.id}
                 data-task-id={task.id}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', task.id)
-                  e.dataTransfer.effectAllowed = 'move'
-                }}
                 title="拖到日历时间槽排期"
-                className="cursor-grab rounded-ctl border border-transparent px-2 py-1.5 transition-colors hover:border-border hover:bg-surface active:cursor-grabbing"
+                className="fc-external-drag cursor-grab rounded-ctl border border-transparent px-2 py-1.5 transition-colors hover:border-border hover:bg-surface active:cursor-grabbing"
               >
                 <div className="flex items-center gap-2">
                   <span

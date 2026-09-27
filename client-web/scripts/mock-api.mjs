@@ -141,18 +141,6 @@ createServer((req, res) => {
     }
     return
   }
-  if (path === '/api/v1/calendar/schedule') {
-    readBody((body) => {
-      const slots = (body.taskIds ?? []).map((id, i) => ({
-        taskId: id,
-        title: TASKS.find((t) => t.id === id)?.title ?? `任务${i}`,
-        start: at(14 + i * 2),
-        end: at(15 + i * 2),
-      }))
-      ok(res, { algorithmName: 'greedy', slots, metrics: { tasks_scheduled: slots.length } })
-    })
-    return
-  }
   if (path.startsWith('/api/v1/calendar/tasks/') && path.endsWith('/segments')) {
     const taskId = path.split('/')[5]
     ok(res, [{ id: 'seg-1', taskId, taskTitle: '深度工作块：日历组件', startsAt: at(14), endsAt: at(16), status: 'planned', source: 'manual', planningReason: null, confirmationId: null }])
@@ -350,16 +338,6 @@ createServer((req, res) => {
     ok(res, { items: [
       { id: 'av-1', objectType: seg[5] ?? 'task', objectId: seg[6] ?? 't1', confirmationId: null, source: 'manual', actor: 'system', beforeJson: '{"plannedStart":null}', afterJson: '{"plannedStart":"2026-09-25T20:00:00Z"}', changedFieldsJson: '["plannedStart"]', createdAt: at(10) },
     ] })
-    return
-  }
-
-  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') {
-    // 通用写操作回显成功
-    seq++
-    if (req.method === 'POST' && path === '/api/v1/calendar/events') { readBody((b) => ok(res, { ...EVENTS[0], id: `e${seq}`, ...b })); return }
-    if (req.method === 'POST' && path === '/api/v1/calendar/tasks') { readBody((b) => ok(res, { ...TASKS[0], id: `t${seq}`, ...b })); return }
-    if (req.method === 'DELETE') { ok(res, '已删除'); return }
-    readBody((b) => ok(res, b))
     return
   }
 
@@ -854,6 +832,58 @@ if (path === '/api/v1/files/sync-batches') {
   return
 }
 if (/pc\/app-signatures$/.test(path) && req.method === 'POST') { readBody(() => ok(res, { id: 'sig-new' })); return }
+
+/* MOCK-AUDIT-FIX */
+if (/mobile\/analytics\/sessions\/[^/]+\/events$/.test(path)) {
+  ok(res, [{ id: 'ev-1', sessionId: 's1', deviceId: 'pixel-7', packageName: 'com.tencent.mm', eventType: 'ACTIVITY_RESUMED', eventTimeUtc: iso(21), className: 'MainActivity', rawJson: '{}' }, { id: 'ev-2', sessionId: 's1', deviceId: 'pixel-7', packageName: 'com.tencent.mm', eventType: 'ACTIVITY_PAUSED', eventTimeUtc: iso(21, 40), className: 'MainActivity', rawJson: '{}' }])
+  return
+}
+if (/mobile\/devices\/[^/]+\/liveness\/events$/.test(path)) {
+  ok(res, { items: [{ id: 'le-1', eventType: 'heartbeat', eventTypeLabel: '心搏', occurredAtUtc: at(10), reason: null, reasonLabel: null, inference: null, importance: 0, pssKb: 12000, rssKb: 45000, description: '定时心跳', payloadJson: '{}' }, { id: 'le-2', eventType: 'process-exit', eventTypeLabel: '进程退出', occurredAtUtc: at(3), reason: 'reboot', reasonLabel: '设备重启', inference: '系统启动时间晚于退出时间', importance: 100, pssKb: null, rssKb: null, description: null, payloadJson: '{}' }], page: 1, pageSize: 50, totalCount: 2, totalPages: 1 })
+  return
+}
+if (path === '/api/v1/pc/aggregation/focus-blocks') {
+  ok(res, { items: [{ startUtc: iso(9), endUtc: iso(11), startLocal: '09:00', endLocal: '11:00', durationMinutes: 120, mainApp: 'VS Code', topApps: [{ name: 'VS Code', minutes: 96 }, { name: 'Chrome', minutes: 24 }] }, { startUtc: iso(14), endUtc: iso(16), startLocal: '14:00', endLocal: '16:00', durationMinutes: 120, mainApp: 'Obsidian', topApps: [{ name: 'Obsidian', minutes: 80 }] }] })
+  return
+}
+if (path === '/api/v1/pc/aggregation/late-night') {
+  ok(res, { items: Array.from({ length: 7 }, (_, i) => ({ date: daysAgo(6 - i).slice(0, 10), minutes: Math.round(Math.random() * 60), hadActivity: true })) })
+  return
+}
+if (path === '/api/v1/calendar/schedule') {
+  readBody((b) => {
+    const ids = (b.taskIds ?? []).slice(0, 5)
+    const mkSlots = (stepH) => ids.map((id, i) => ({ taskId: id, title: (TASKS.find((t) => t.id === id) ?? {}).title ?? ('任务' + i), start: at(9 + i * stepH), end: at(10 + i * stepH) }))
+    ok(res, [
+      { algorithmName: 'greedy', slots: mkSlots(2), metrics: { tasks_scheduled: ids.length, total_tasks: ids.length } },
+      { algorithmName: 'csp', slots: mkSlots(3), metrics: { tasks_scheduled: ids.length } },
+    ])
+  })
+  return
+}
+if (/\/calendar\/tasks\/[^/]+$/.test(path) && req.method === 'PUT') {
+  readBody((b) => ok(res, { ...(TASKS.find((t) => t.id === path.split('/')[5]) ?? TASKS[0]), ...b }))
+  return
+}
+
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') {
+    // 通用写操作回显成功
+    seq++
+    if (req.method === 'POST' && path === '/api/v1/calendar/events') { readBody((b) => ok(res, { ...EVENTS[0], id: `e${seq}`, ...b })); return }
+    if (req.method === 'POST' && path === '/api/v1/calendar/tasks') { readBody((b) => ok(res, { ...TASKS[0], id: `t${seq}`, ...b })); return }
+    if (req.method === 'DELETE') { ok(res, '已删除'); return }
+    readBody((b) => ok(res, b))
+    return
+  }
+
+
+if (path === '/api/v1/mobile/devices') {
+  ok(res, [
+    { id: 'md-1', deviceId: 'pixel-7', androidIdHash: 'hash-a', displayName: 'Pixel 7', manufacturer: 'Google', brand: 'Google', model: 'Pixel 7', androidVersion: 'Android 15', sdkInt: 35, appVersion: '1.4.0', metadataJson: '{"deviceKind":"phone"}', firstSeenAt: daysAgo(30), lastSeenAt: new Date().toISOString(), lastHeartbeatAt: null, lastSyncAt: null, isActive: true, deviceHash: 'hash-a', osVersion: 'Android 15', apiLevel: 35 },
+    { id: 'md-2', deviceId: 'mi-pad', androidIdHash: 'hash-b', displayName: '小米平板', manufacturer: 'Xiaomi', brand: 'Xiaomi', model: 'Pad 6', androidVersion: 'Android 14', sdkInt: 34, appVersion: '1.3.2', metadataJson: '{"deviceKind":"tablet","smallestScreenWidthDp":800}', firstSeenAt: daysAgo(60), lastSeenAt: daysAgo(0.2), lastHeartbeatAt: null, lastSyncAt: null, isActive: true, deviceHash: 'hash-b', osVersion: 'Android 14', apiLevel: 34 },
+  ])
+  return
+}
 
   json(res, 404, { code: 404, message: `接口不存在: ${path}`, data: null, timestamp: new Date().toISOString() })
 }).listen(5858, () => console.log('mock api on :5858'))

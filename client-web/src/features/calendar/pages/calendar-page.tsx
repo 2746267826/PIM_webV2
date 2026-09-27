@@ -1,24 +1,24 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
-import interactionPlugin from '@fullcalendar/interaction'
+import interactionPlugin, { ThirdPartyDraggable } from '@fullcalendar/interaction'
 import zhCnLocale from '@fullcalendar/core/locales/zh-cn'
 import type { DatesSetArg, EventClickArg } from '@fullcalendar/core'
 import { CalendarPlus, ChevronLeft, ChevronRight, Inbox, Paintbrush } from 'lucide-react'
 import { Link } from 'react-router'
 import '../styles/calendar-skins.css'
 import { useCalendarVisibility } from '../calendar-visibility'
-import { useCalendars, useEvents, useLayers, usePlanTask, useTaskBooks } from '../queries'
+import { useCalendars, useEvents, useInboxTasks, useLayers, usePlanTask, useTaskBooks } from '../queries'
 import { EventEditorDialog } from '../components/event-editor-dialog'
 import { TaskEditorDialog } from '../components/task-editor-dialog'
 import { InboxPanel } from '../components/inbox-panel'
 import type { EventResponse, LayerItem } from '../types'
-import { dayEndIso, dayStartIso } from '@/lib/datetime'
+import { dayEndIso, dayStartIso, durationToMinutes } from '@/lib/datetime'
 import { Chip, Button, Drawer, DrawerContent, PageHeader } from '@/components/ui'
 import { cn } from '@/lib/utils'
-import { notifyError } from '@/lib/notify'
+import { notifyError, notifySuccess } from '@/lib/notify'
 
 interface FcEvent {
   id: string
@@ -47,6 +47,7 @@ export function CalendarPage() {
   const { layerToggles, toggleLayer } = useCalendarVisibility()
   const { data: calendars = [] } = useCalendars('calendar')
   const { data: taskBooks = [] } = useTaskBooks()
+  const { data: inboxData } = useInboxTasks()
   const plan = usePlanTask()
 
   const calendarRef = useRef<FullCalendar>(null)
@@ -131,14 +132,40 @@ export function CalendarPage() {
     setEventEditor({ mode: 'create', initial: { start: info.start, end: info.end } })
   }
 
-  /* 收件箱任务拖入 → 排期（自动按时长估算） */
+  /*
+   * 收件箱任务拖入 → 排期（自动按时长估算）。
+   * FullCalendar v6 的外部拖入由 pointer events 驱动，必须用 ThirdPartyDraggable 包装拖拽源；
+   * 此处以「整页」为容器、`.fc-external-drag` 为条目选择器，命中后由 drop 回调给出时间槽。
+   */
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const draggable = new ThirdPartyDraggable(document.body, {
+      itemSelector: '.fc-external-drag',
+    })
+    return () => draggable.destroy()
+  }, [])
+
   function onDrop(info: { date: Date; draggedEl: HTMLElement }) {
     const taskId = info.draggedEl.getAttribute('data-task-id')
     if (!taskId) return
     const start = info.date
+    const task = (inboxData ?? []).find((t) => t.id === taskId)
+    // estimatedDuration 为后端 TimeSpan "c" 格式；有值则按其推算 plannedEnd
+    const minutes = durationToMinutes(task?.estimatedDuration ?? null)
+    const end = minutes != null ? new Date(start.getTime() + minutes * 60_000) : undefined
     plan.mutate(
-      { id: taskId, body: { plannedStart: start.toISOString() } },
-      { onError: (e) => notifyError(e instanceof Error ? e.message : '排期失败') },
+      {
+        id: taskId,
+        body: {
+          plannedStart: start.toISOString(),
+          ...(end ? { plannedEnd: end.toISOString() } : {}),
+          ...(task?.estimatedDuration ? { estimatedDuration: task.estimatedDuration } : {}),
+        },
+      },
+      {
+        onSuccess: () => notifySuccess(`已排期：${task?.title ?? '任务'}`),
+        onError: (e) => notifyError(e instanceof Error ? e.message : '排期失败'),
+      },
     )
   }
 
@@ -219,6 +246,7 @@ export function CalendarPage() {
             drop={onDrop}
             eventClick={onEventClick}
             height="auto"
+            stickyHeaderDates
             allDaySlot
             nowIndicator
             slotMinTime="00:00:00"
@@ -288,14 +316,16 @@ export function CalendarPage() {
           />
         </div>
 
-        {/* 收件箱侧板（≥1024 常驻） */}
-        <aside className="hidden w-[280px] shrink-0 border-l border-border lg:block">
+        {/* 收件箱侧板（≥1024 常驻；sticky 使其在长日历滚动时保持可见，拖拽源不跑出视口） */}
+        <aside className="hidden w-[280px] shrink-0 lg:block">
+          <div className="sticky top-2 max-h-[calc(100dvh-6rem)] overflow-hidden rounded-card border border-border bg-bg shadow-card">
           <InboxPanel
             onNewTask={() => setTaskEditorOpen(true)}
             onNewEvent={() =>
               setEventEditor({ mode: 'create', initial: { start: nextHour(), end: nextHourPlus() } })
             }
           />
+          </div>
         </aside>
       </div>
 

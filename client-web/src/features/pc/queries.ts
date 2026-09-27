@@ -17,26 +17,26 @@ export const pcKeys = {
   browserTimeline: (date: string) => ['pc', 'browser', 'timeline', date] as const,
 }
 
-export function usePcSummary(date: string) {
+export function usePcSummary(date: string, force = false) {
   return useQuery({
-    queryKey: pcKeys.summary(date),
-    queryFn: () => pcApi.summary(date),
+    queryKey: [...pcKeys.summary(date), force],
+    queryFn: () => pcApi.summary(date, force),
     refetchInterval: () => deferredIntervalMs(),
   })
 }
 
-export function useHeatmapGrid(start: string, end: string, dimension: string, enabled = true) {
+export function useHeatmapGrid(start: string, end: string, dimension: string, enabled = true, force = false) {
   return useQuery({
-    queryKey: pcKeys.heatmap(start, end, dimension),
-    queryFn: () => pcApi.heatmapGrid({ start, end, dimension }),
+    queryKey: [...pcKeys.heatmap(start, end, dimension), force],
+    queryFn: () => pcApi.heatmapGrid({ start, end, dimension, force }),
     enabled,
   })
 }
 
-export function useActivityAnalysis(date: string, enabled = true) {
+export function useActivityAnalysis(date: string, enabled = true, force = false) {
   return useQuery({
-    queryKey: pcKeys.activity(date),
-    queryFn: () => pcApi.activityAnalysis(date),
+    queryKey: [...pcKeys.activity(date), force],
+    queryFn: () => pcApi.activityAnalysis(date, 60, force),
     enabled,
     refetchInterval: () => deferredIntervalMs(),
   })
@@ -45,7 +45,7 @@ export function useActivityAnalysis(date: string, enabled = true) {
 export function useAppUsage(date: string, enabled = true) {
   return useQuery({
     queryKey: pcKeys.appUsage(date),
-    queryFn: () => pcApi.appUsage(date, 8),
+    queryFn: () => pcApi.appUsage({ date, timezone: 'Asia/Shanghai', limit: 8 }),
     enabled,
   })
 }
@@ -53,15 +53,33 @@ export function useAppUsage(date: string, enabled = true) {
 export function useCategoryDistribution(date: string, enabled = true) {
   return useQuery({
     queryKey: pcKeys.categories(date),
-    queryFn: () => pcApi.categoryDistribution(date),
+    queryFn: () => pcApi.categoryDistribution({ date, timezone: 'Asia/Shanghai' }),
     enabled,
   })
 }
 
-export function useProductivity(date: string, enabled = true) {
+/** 专注块（今日页/总览页用） */
+export function useFocusBlocks(date: string, enabled = true) {
   return useQuery({
-    queryKey: pcKeys.productivity(date),
-    queryFn: () => pcApi.productivity(date),
+    queryKey: ['pc', 'focus-blocks', date],
+    queryFn: () => pcApi.focusBlocks({ date, timezone: 'Asia/Shanghai' }),
+    enabled,
+  })
+}
+
+/** 深夜使用（总览页用） */
+export function useLateNight(date: string, enabled = true) {
+  return useQuery({
+    queryKey: ['pc', 'late-night', date],
+    queryFn: () => pcApi.lateNight({ date, timezone: 'Asia/Shanghai' }),
+    enabled,
+  })
+}
+
+export function useProductivity(date: string, enabled = true, force = false) {
+  return useQuery({
+    queryKey: [...pcKeys.productivity(date), force],
+    queryFn: () => pcApi.productivity(date, force),
     enabled,
   })
 }

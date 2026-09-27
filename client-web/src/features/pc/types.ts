@@ -6,11 +6,19 @@ export interface KeystatsSummary {
   totalClicks: number
   leftClicks: number
   rightClicks: number
+  /** 中键点击数（规格 pc-tracker.md:29） */
+  middleClicks: number
+  /** 侧键后退点击数 */
+  sideBackClicks: number
+  /** 侧键前进点击数 */
+  sideForwardClicks: number
   mouseDistance: number
   scrollDistance: number
   peakKps: number
   peakCps: number
   keyPressCounts: Record<string, number>
+  /** 按键 Top 榜（规格 pc-tracker.md:38-40） */
+  topKeys?: { keyName: string; count: number; share: number }[]
 }
 
 export interface HeatmapBucket {

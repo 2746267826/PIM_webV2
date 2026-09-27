@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { deferredIntervalMs, standardIntervalMs } from '@/lib/polling'
 import { calendarsApi, checklistApi, eventsApi, layersApi, segmentsApi, taskBooksApi, tasksApi } from './api'
-import type { TasksPagedParams } from './types'
+import type { TaskResponse, TasksPagedParams } from './types'
+import { taskToMutationData } from './types'
 
 /* ── queryKey 工厂（CONVENTIONS §4：禁止散写字符串数组） ───── */
 
@@ -191,11 +192,17 @@ export function usePlanTask() {
   })
 }
 
+/**
+ * 完成状态切换：PUT /calendar/tasks/{id} 是**整体替换式**语义
+ * （title/description/priority/due/时长/dtStart 均按请求写入），
+ * 因此必须先经 taskToMutationData 把当前值补齐再提交，否则字段会被清空。
+ */
 export function useToggleTaskComplete() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ task, completed }: { task: { id: string }; completed: boolean }) =>
+    mutationFn: ({ task, completed }: { task: TaskResponse; completed: boolean }) =>
       tasksApi.update(task.id, {
+        ...taskToMutationData(task),
         status: completed ? 'COMPLETED' : 'NEEDS-ACTION',
         percentComplete: completed ? 100 : 0,
       }),
