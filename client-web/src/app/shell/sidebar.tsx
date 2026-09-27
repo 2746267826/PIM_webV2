@@ -153,8 +153,8 @@ function SidebarContent({
         )}
       </div>
 
-      {/* 导航 */}
-      <nav className={cn('flex-1 overflow-y-auto pb-2', compact ? 'px-2' : 'px-4')}>
+      {/* 导航（overflow-x-hidden：折叠态下不产生横向滚动条） */}
+      <nav className={cn('flex-1 overflow-y-auto overflow-x-hidden pb-2', compact ? 'px-2' : 'px-4')}>
         {NAV_GROUPS.map((group) => (
           <div key={group.label} className="mb-1">
             {!compact && (
@@ -174,8 +174,8 @@ function SidebarContent({
           </div>
         ))}
 
-        {/* 日历本管理器（新建/重命名/显隐/删除预览，点击跳转） */}
-        <CalendarBooksManager onNavigate={onNavigate} />
+        {/* 日历本/任务本管理器：仅展开态显示（折叠时无处容纳，从图标栏隐藏） */}
+        {!compact && <CalendarBooksManager onNavigate={onNavigate} />}
       </nav>
 
       {/* 底部：状态点 + 用户 + 服务器 */}

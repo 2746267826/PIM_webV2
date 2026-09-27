@@ -29,6 +29,7 @@ interface SettingCard {
   title: string
   description: string
   icon: LucideIcon
+  /** 仅当页面尚未实现时标记（当前仅展览馆） */
   badge?: '建设中'
 }
 
@@ -52,24 +53,23 @@ const SECTIONS: SettingSection[] = [
         title: 'Microsoft 账户',
         description: 'Outlook 日历同步与 OneDrive 文件绑定',
         icon: Cloud,
-        badge: '建设中',
       },
     ],
   },
   {
     label: '智能与自动化',
     cards: [
-      { to: '/settings/ai', title: 'AI 网关', description: '状态、用量与请求日志', icon: Bot, badge: '建设中' },
-      { to: '/settings/mcp', title: 'MCP 连接', description: '客户端、令牌与工具权限', icon: Plug, badge: '建设中' },
+      { to: '/settings/ai', title: 'AI 网关', description: '状态、用量与请求日志', icon: Bot },
+      { to: '/settings/mcp', title: 'MCP 连接', description: '客户端、令牌与工具权限', icon: Plug },
     ],
   },
   {
     label: '数据',
     cards: [
-      { to: '/settings/data-reliability', title: '数据可信度', description: '13 规则数据体检', icon: ShieldCheck, badge: '建设中' },
-      { to: '/settings/calendar-data', title: '日程数据管理', description: '事件批量管理与 ICS 导入导出', icon: CalendarCog, badge: '建设中' },
-      { to: '/settings/recycle-bin', title: '回收站', description: '日历域回收站与恢复预览', icon: Trash2, badge: '建设中' },
-      { to: '/settings/pc-data', title: 'PC 明细查询', description: 'PC 原始记录 14 字段明细', icon: Table, badge: '建设中' },
+      { to: '/settings/data-reliability', title: '数据可信度', description: '13 规则数据体检', icon: ShieldCheck },
+      { to: '/settings/calendar-data', title: '日程数据管理', description: '事件批量管理与 ICS 导入导出', icon: CalendarCog },
+      { to: '/settings/recycle-bin', title: '回收站', description: '日历域回收站与恢复预览', icon: Trash2 },
+      { to: '/settings/pc-data', title: 'PC 明细查询', description: 'PC 原始记录 14 字段明细', icon: Table },
     ],
   },
 ]
@@ -83,7 +83,7 @@ export function SettingsHubPage() {
     sections.push({
       label: '组织',
       cards: [
-        { to: '/settings/users', title: '用户管理', description: '用户与角色管理', icon: Users, badge: '建设中' },
+        { to: '/settings/users', title: '用户管理', description: '用户与角色管理', icon: Users },
       ],
     })
   }
@@ -92,8 +92,8 @@ export function SettingsHubPage() {
     cards: [
       { to: '/exhibition', title: '展览馆', description: '图表组件陈列馆', icon: Images, badge: '建设中' },
       { to: '/status', title: '状态', description: '系统与组件状态', icon: Activity },
-      { to: '/devices', title: '设备管理', description: '移动设备合并/改名/导出', icon: HardDrive, badge: '建设中' },
-      { to: '/app-knowledge-base', title: '应用知识库', description: '应用/域名知识与分类树', icon: BookOpen, badge: '建设中' },
+      { to: '/devices', title: '设备管理', description: '移动设备合并/改名/导出', icon: HardDrive },
+      { to: '/app-knowledge-base', title: '应用知识库', description: '应用/域名知识与分类树', icon: BookOpen },
     ],
   })
 
