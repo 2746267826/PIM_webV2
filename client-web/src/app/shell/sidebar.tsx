@@ -78,7 +78,12 @@ function NavItemButton({
   )
 }
 
-function SidebarStatusDot() {
+/*
+ * 健康状态灯（唯一的系统状态指示）。
+ * compact（折叠态）只渲染圆点 + title 提示：文字在 64px 栏里会折成两行，过于拥挤。
+ * 侧边栏头部不再放装饰性蓝点——它与本状态灯同为「小圆点」，会被误读为两个状态灯。
+ */
+function SidebarStatusDot({ compact = false }: { compact?: boolean }) {
   const { data } = useStatusSummary()
   const status = normalizeHealthStatus(data?.status)
   const dotClass = {
@@ -87,13 +92,26 @@ function SidebarStatusDot() {
     critical: 'bg-crit status-dot-critical',
     unknown: 'bg-neutral',
   }[status]
+  const label = data ? HEALTH_LABEL[status] : '状态未知'
+  if (compact) {
+    return (
+      <Link
+        to="/status"
+        title={`系统状态：${label}`}
+        aria-label={`系统状态：${label}`}
+        className="grid size-8 place-items-center rounded-ctl transition-colors hover:bg-surface-2 outline-none"
+      >
+        <span className={cn('size-2.5 rounded-full', dotClass)} aria-hidden />
+      </Link>
+    )
+  }
   return (
     <Link
       to="/status"
       className="flex items-center gap-1.5 rounded-ctl px-1 py-0.5 text-xs text-text-3 transition-colors hover:text-text-1 outline-none"
     >
       <span className={cn('size-2 rounded-full', dotClass)} aria-hidden />
-      {data ? HEALTH_LABEL[status] : '状态未知'}
+      {label}
     </Link>
   )
 }
@@ -129,9 +147,8 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col">
-      {/* 头部 */}
+      {/* 头部：品牌名（不放装饰圆点，避免与底部状态灯混淆） */}
       <div className={cn('flex h-16 shrink-0 items-center gap-2', compact ? 'justify-center px-0' : 'px-4')}>
-        <span className="size-2.5 shrink-0 rounded-full bg-primary" aria-hidden />
         {!compact && <span className="flex-1 text-base font-semibold tracking-wide text-text-1">PIM</span>}
         {onToggle && (
           <button
@@ -181,8 +198,8 @@ function SidebarContent({
       {/* 底部：状态点 + 用户 + 服务器 */}
       <div className={cn('shrink-0 border-t border-divider', compact ? 'px-2 py-3' : 'px-4 py-3')}>
         {compact ? (
-          <div className="flex flex-col items-center gap-3">
-            <SidebarStatusDot />
+          <div className="flex flex-col items-center gap-2">
+            <SidebarStatusDot compact />
             <button
               type="button"
               title={`退出登录（${(user?.displayName ?? user?.username) || ''}）`}

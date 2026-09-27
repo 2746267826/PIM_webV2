@@ -52,7 +52,12 @@ export function AppShell() {
   return (
     <CalendarVisibilityProvider>
       <GlobalEditorsProvider>
-      <div className="flex min-h-dvh flex-col">
+      {/*
+        外壳高度策略：整体锁在视口内（h-dvh + overflow-hidden），由 <main> 承担滚动。
+        这样侧边栏与页脚常驻，内容不会把整个文档撑高——否则「文件」这类三栏布局
+        会出现整页滚动，中间列表的内部滚动永远不生效。
+      */}
+      <div className="flex h-dvh flex-col overflow-hidden">
       {/* 移动顶条 */}
       <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-bg px-3 md:hidden">
         <button
@@ -71,22 +76,22 @@ export function AppShell() {
 
       <div className="flex min-h-0 flex-1">
         {/* 平板图标栏 */}
-        <aside className="sticky top-0 hidden h-dvh w-16 shrink-0 border-r border-border bg-surface md:block lg:hidden">
+        <aside className="hidden h-full shrink-0 border-r border-border bg-surface md:block lg:hidden">
           <SidebarContent compact />
         </aside>
 
         {/* 桌面侧边栏（可折叠为图标栏；折叠状态持久化） */}
         <aside
           className={cn(
-            'sticky top-0 hidden h-dvh shrink-0 border-r border-border bg-surface transition-[width] duration-200 lg:block',
+            'hidden h-full shrink-0 border-r border-border bg-surface transition-[width] duration-200 lg:block',
             collapsed ? 'w-16' : 'w-[232px]',
           )}
         >
           <SidebarContent compact={collapsed} onToggle={toggle} />
         </aside>
 
-        {/* 主内容区：每页独立错误边界 */}
-        <main className="min-w-0 flex-1 px-4 py-4 md:px-5 md:py-5 lg:px-6 lg:py-6">
+        {/* 主内容区：外壳内唯一滚动容器；每页独立错误边界 */}
+        <main className="min-w-0 flex-1 overflow-y-auto px-4 py-4 md:px-5 md:py-5 lg:px-6 lg:py-6">
           <ErrorBoundary level="page">
             <Outlet />
           </ErrorBoundary>

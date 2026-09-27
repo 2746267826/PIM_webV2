@@ -4,6 +4,7 @@ import { Plus, Search, Timer } from 'lucide-react'
 import { useBatchDeleteTasks, useTaskBooks, useTasksPaged, useToggleTaskComplete } from '../queries'
 import { TaskEditorDialog } from '../components/task-editor-dialog'
 import { TaskSegmentsDialog } from '../components/task-segments-dialog'
+import { TaskDetailDialog } from '../components/entity-detail-dialogs'
 import type { TaskResponse } from '../types'
 import { dayEndIso, dayStartIso, formatDurationC, formatTime } from '@/lib/datetime'
 import { Button, Card, Checkbox, Chip, EmptyState, Input, PageHeader, Select, Skeleton, StatusBadge } from '@/components/ui'
@@ -55,6 +56,7 @@ export function TasksPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editorTask, setEditorTask] = useState<TaskResponse | null | undefined>(undefined)
   const [editorOpen, setEditorOpen] = useState(false)
+  const [detailTask, setDetailTask] = useState<TaskResponse | null>(null)
   const [segmentsTask, setSegmentsTask] = useState<TaskResponse | null>(null)
 
   const { data: taskBooks = [] } = useTaskBooks()
@@ -258,10 +260,7 @@ export function TasksPage() {
                     <button
                       type="button"
                       className="min-w-0 flex-1 text-left outline-none"
-                      onClick={() => {
-                        setEditorTask(task)
-                        setEditorOpen(true)
-                      }}
+                      onClick={() => setDetailTask(task)}
                     >
                       <span className={cn('block truncate text-sm', done ? 'text-text-4 line-through' : 'text-text-1')}>
                         {task.title}
@@ -347,6 +346,18 @@ export function TasksPage() {
         taskId={segmentsTask?.id ?? null}
         taskTitle={segmentsTask?.title ?? ''}
         onClose={() => setSegmentsTask(null)}
+      />
+
+      {/* 详情（只读）→ 点「编辑」才进编辑弹窗 */}
+      <TaskDetailDialog
+        task={detailTask}
+        taskBookName={taskBooks.find((b) => b.id === detailTask?.taskBookId)?.name}
+        onClose={() => setDetailTask(null)}
+        onEdit={(t) => {
+          setDetailTask(null)
+          setEditorTask(t)
+          setEditorOpen(true)
+        }}
       />
     </div>
   )

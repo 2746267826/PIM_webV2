@@ -6,6 +6,7 @@ import { quickNotesApi } from '../api'
 import { useQuickNoteMutations } from '../queries'
 import type { QuickNoteAttachment, QuickNoteDetail } from '../types'
 import { STORAGE_KEYS, getJSON, setJSON } from '@/lib/storage'
+import { cn } from '@/lib/utils'
 import { ConfirmDialog, Button, Select } from '@/components/ui'
 
 export interface QuickNoteDialogProps {
@@ -32,7 +33,22 @@ export function QuickNoteDialog({ note, onClose }: QuickNoteDialogProps) {
   const dragRef = useRef<HTMLDivElement>(null)
 
   /* 弹窗位置记忆 */
-  const [pos, setPos] = useState(() => getJSON<{ x: number; y: number } | null>(STORAGE_KEYS.quickNoteDialogPosition, null))
+  /*
+   * 弹窗位置记忆：读取时做视口收敛，避免历史坐标（旧版本按 left 语义写入，
+   * 或窗口尺寸变化后）把弹窗甩到屏幕外或看起来偏心。
+   */
+  const [pos, setPos] = useState(() => {
+    const saved = getJSON<{ x: number; y: number } | null>(STORAGE_KEYS.quickNoteDialogPosition, null)
+    if (!saved) return null
+    if (typeof window === 'undefined') return saved
+    const w = 560
+    const maxX = Math.max(0, window.innerWidth - w)
+    if (!Number.isFinite(saved.x) || !Number.isFinite(saved.y)) return null
+    return {
+      x: Math.min(Math.max(0, saved.x), maxX),
+      y: Math.min(Math.max(0, saved.y), Math.max(0, window.innerHeight - 120)),
+    }
+  })
 
   useEffect(() => {
     if (note) {
@@ -86,8 +102,16 @@ export function QuickNoteDialog({ note, onClose }: QuickNoteDialogProps) {
     <>
       <div className="fixed inset-0 z-40 bg-text-1/10" onClick={onClose} />
       <div
-        className="fixed z-50 flex max-h-[80dvh] w-[560px] max-w-[calc(100dvw-24px)] flex-col rounded-card border border-border bg-bg shadow-modal outline-none animate-[pim-pop-in_200ms_cubic-bezier(.32,.72,.24,1)]"
-        style={pos ? { top: pos.y, left: pos.x } : { top: '12vh', left: '50%', transform: 'translateX(-50%)' }}
+        /*
+         * 居中方式：无记忆位置时用 left-1/2 + -translate-x-1/2（Tailwind v4 编译到 translate 属性），
+         * 而不是内联 transform —— 内联 transform 会被 pim-pop-in 动画的 transform 覆盖，
+         * 入场瞬间先落在偏右位置，动画结束才回到中央。
+         */
+        className={cn(
+          'fixed z-50 flex max-h-[80dvh] w-[560px] max-w-[calc(100dvw-24px)] flex-col rounded-card border border-border bg-bg shadow-modal outline-none animate-[pim-pop-in_200ms_cubic-bezier(.32,.72,.24,1)]',
+          !pos && 'top-[12vh] left-1/2 -translate-x-1/2',
+        )}
+        style={pos ? { top: pos.y, left: pos.x } : undefined}
       >
         {/* 可拖拽标题栏 */}
         <div ref={dragRef} onMouseDown={startDrag} className="flex cursor-grab items-center gap-2 border-b border-divider px-3 py-2 active:cursor-grabbing">

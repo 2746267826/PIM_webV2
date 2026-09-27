@@ -13,6 +13,7 @@ import '../styles/calendar-skins.css'
 import { useCalendarVisibility } from '../calendar-visibility'
 import { useCalendars, useEvents, useInboxTasks, useLayers, usePlanTask, useTaskBooks } from '../queries'
 import { EventEditorDialog } from '../components/event-editor-dialog'
+import { EventDetailDialog } from '../components/entity-detail-dialogs'
 import { TaskEditorDialog } from '../components/task-editor-dialog'
 import { InboxPanel } from '../components/inbox-panel'
 import type { EventResponse, LayerItem } from '../types'
@@ -84,6 +85,8 @@ export function CalendarPage() {
   const [eventEditor, setEventEditor] = useState<
     { mode: 'create'; initial: { start: Date; end: Date } } | { mode: 'edit'; event: EventResponse } | null
   >(null)
+  /* 只读详情：点击卡片先看详情，再决定是否编辑 */
+  const [detail, setDetail] = useState<EventResponse | null>(null)
   const [taskEditorOpen, setTaskEditorOpen] = useState(false)
   const [inboxOpen, setInboxOpen] = useState(false)
 
@@ -142,7 +145,20 @@ export function CalendarPage() {
 
   function onEventClick(arg: EventClickArg) {
     const event = arg.event.extendedProps.event as EventResponse | undefined
-    if (event) setEventEditor({ mode: 'edit', event })
+    if (event) setDetail(event)
+  }
+
+  /*
+   * 月视图点击日期格 → 跳到该日时间轴（规格：月网格用于选日）。
+   * 点日程本身仍走 onEventClick（详情），由 FullCalendar 自行区分事件与空白格。
+   */
+  function onDateClick(arg: { date: Date; dateStr: string; allDay: boolean; jsEvent: MouseEvent }) {
+    if (view !== 'month') return
+    // dateClick 在点中事件时也会触发（jsEvent.target 落在 .fc-event 内），此时交给 onEventClick
+    const target = arg.jsEvent.target as HTMLElement | null
+    if (target?.closest('.fc-event')) return
+    calendarRef.current?.getApi().gotoDate(arg.date)
+    setView('timeline')
   }
 
   /*
@@ -284,7 +300,8 @@ export function CalendarPage() {
 
       {/* 日历主体 + 收件箱侧板（皮肤：谷歌竖条日视图 / 圆点行月视图） */}
       <div className="flex min-h-0 flex-1 gap-4">
-        <div className="skin-gcal min-w-0 flex-1 select-none [&_.fc-event-mirror]:pointer-events-none">
+        {/* 日历网格自身滚动：收件箱侧板因此常驻可见（主滚动容器在外壳 main 上） */}
+        <div className="skin-gcal min-w-0 flex-1 overflow-y-auto select-none [&_.fc-event-mirror]:pointer-events-none">
           <FullCalendar
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -296,6 +313,7 @@ export function CalendarPage() {
             selectable={view === 'timeline'}
             selectMirror
             select={onSelect}
+            dateClick={onDateClick}
             droppable
             eventReceive={onEventReceive}
             eventClick={onEventClick}
@@ -386,9 +404,9 @@ export function CalendarPage() {
           />
         </div>
 
-        {/* 收件箱侧板（≥1024 常驻；sticky 使其在长日历滚动时保持可见，拖拽源不跑出视口） */}
+        {/* 收件箱侧板（≥1024 常驻；日历网格独立滚动，此板不动，拖拽源不跑出视口） */}
         <aside className="hidden w-[280px] shrink-0 lg:block">
-          <div className="sticky top-2 max-h-[calc(100dvh-6rem)] overflow-hidden rounded-card border border-border bg-bg shadow-card">
+          <div className="h-full max-h-[calc(100dvh-8rem)] overflow-hidden rounded-card border border-border bg-bg shadow-card">
             <InboxPanel
             onNewTask={() => setTaskEditorOpen(true)}
             onNewEvent={() =>
@@ -423,6 +441,17 @@ export function CalendarPage() {
         event={eventEditor?.mode === 'edit' ? eventEditor.event : null}
       />
       <TaskEditorDialog open={taskEditorOpen} onOpenChange={setTaskEditorOpen} taskBooks={taskBooks} />
+
+      {/* 详情（只读）→ 点「编辑」才进编辑弹窗 */}
+      <EventDetailDialog
+        event={detail}
+        calendarName={calendars.find((c) => c.id === detail?.calendarId)?.name}
+        onClose={() => setDetail(null)}
+        onEdit={(ev) => {
+          setDetail(null)
+          setEventEditor({ mode: 'edit', event: ev })
+        }}
+      />
     </div>
   )
 }
