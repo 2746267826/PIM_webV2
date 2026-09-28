@@ -51,6 +51,11 @@ export function CategoryTimeline({
 }: CategoryTimelineProps) {
   const [showAllHours, setShowAllHours] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
+  /*
+   * 悬浮明细锚点：容器已 overflow-hidden（不出现滚动条），若 tooltip 留在行内会被裁掉，
+   * 故提升到组件根、用 position:fixed 依锚点矩形定位，脱离任何祖先裁剪。
+   */
+  const [anchor, setAnchor] = useState<{ bar: TimelineBar; rect: DOMRect } | null>(null)
 
   const model = useMemo(() => buildTimelineModel(timeline), [timeline])
 
@@ -148,11 +153,21 @@ export function CategoryTimeline({
               </div>
             </div>
 
-            <div className="max-h-[420px] overflow-y-auto">
+            {/*
+              不要滚动条：纵向不再限高（24 行全部展开，由页面整体滚动承担），
+              横向用 overflow-hidden 兜住 100% 处的刻度线等亚像素溢出。
+            */}
+            <div className="overflow-hidden">
               {rows.map((hour) => {
                 const bars = model.barsByHour.get(hour) ?? []
                 return (
-                  <HourRow key={hour} hour={hour} bars={bars} />
+                  <HourRow
+                    key={hour}
+                    hour={hour}
+                    bars={bars}
+                    activeKey={anchor?.bar.key ?? null}
+                    onHover={(bar, rect) => setAnchor(bar ? { bar, rect } : null)}
+                  />
                 )
               })}
             </div>
@@ -172,27 +187,37 @@ export function CategoryTimeline({
           onClose={() => setDetailOpen(false)}
         />
       )}
+
+      {/* 悬浮明细：挂在组件根部（不在 overflow-hidden 容器内，避免被裁） */}
+      {anchor && <BarTooltip bar={anchor.bar} rect={anchor.rect} />}
     </Card>
   )
 }
 
 /* ── 单个小时行 ─────────────────────────────────────────────── */
 
-function HourRow({ hour, bars }: { hour: number; bars: TimelineBar[] }) {
-  const [hovered, setHovered] = useState<string | null>(null)
-  const active = bars.find((b) => b.key === hovered) ?? null
-
+function HourRow({
+  hour,
+  bars,
+  activeKey,
+  onHover,
+}: {
+  hour: number
+  bars: TimelineBar[]
+  activeKey: string | null
+  onHover: (bar: TimelineBar | null, rect: DOMRect) => void
+}) {
   return (
     <div className="flex items-stretch border-b border-divider last:border-b-0">
       <span className="tnum w-14 shrink-0 px-2 py-1.5 text-[11px] text-text-3">
         {String(hour).padStart(2, '0')}:00
       </span>
-      <div className="relative min-h-[26px] flex-1 py-0.5" onMouseLeave={() => setHovered(null)}>
-        {/* 15 分钟刻度线 */}
-        {TICKS.map((t) => (
+      <div className="relative min-h-[26px] flex-1 py-0.5">
+        {/* 15 分钟刻度线（100% 处的线并入右边界，避免产生 1px 横向溢出） */}
+        {TICKS.filter((t) => t < 60).map((t) => (
           <span
             key={t}
-            className={cn('absolute top-0 bottom-0 w-px', t === 0 || t === 60 ? 'bg-transparent' : 'bg-divider')}
+            className={cn('absolute top-0 bottom-0 w-px', t === 0 ? 'bg-transparent' : 'bg-divider')}
             style={{ left: `${(t / 60) * 100}%` }}
             aria-hidden
           />
@@ -211,36 +236,50 @@ function HourRow({ hour, bars }: { hour: number; bars: TimelineBar[] }) {
                 // 与相邻小时的段首尾相接：贴着边界的一侧不做圆角
                 b.offsetMinutes <= 0.001 ? 'rounded-l-none' : '',
                 b.offsetMinutes + b.spanMinutes >= 59.999 ? 'rounded-r-none' : '',
-                active && active.key !== b.key ? 'opacity-40' : 'hover:brightness-110',
+                activeKey && activeKey !== b.key ? 'opacity-40' : 'hover:brightness-110',
               )}
               style={{
                 left: `${left}%`,
                 width: `${width}%`,
                 backgroundColor: b.categoryColor,
               }}
-              onMouseEnter={() => setHovered(b.key)}
-              onFocus={() => setHovered(b.key)}
-              onBlur={() => setHovered(null)}
+              onMouseEnter={(e) => onHover(b, e.currentTarget.getBoundingClientRect())}
+              onFocus={(e) => onHover(b, e.currentTarget.getBoundingClientRect())}
+              onBlur={() => onHover(null, new DOMRect())}
               aria-label={`${b.record.categoryName} ${b.record.appName} ${b.record.startLabel} 至 ${b.record.endLabel} ${Math.round(b.record.durationMinutes)} 分钟`}
             />
           )
         })}
-
-        {/* 悬停明细 */}
-        {active && <BarTooltip bar={active} />}
       </div>
     </div>
   )
 }
 
-/** 悬停/聚焦明细：分类 · 应用名 / 窗口标题 / 起止 HH:mm / 时长（分钟，四舍五入） */
-function BarTooltip({ bar }: { bar: { record: { categoryName: string; categoryColor: string; appName: string; windowTitle: string | null; startLabel: string; endLabel: string; durationMinutes: number } } }) {
+/**
+ * 悬停/聚焦明细：分类 · 应用名 / 窗口标题 / 起止 HH:mm / 时长（分钟，四舍五入）。
+ * 用 position:fixed 依锚点矩形定位：容器是 overflow-hidden（为了不出现滚动条），
+ * 行内绝对定位会被裁掉；固定定位脱离所有祖先裁剪，并自动避免超出视口左右边界。
+ */
+function BarTooltip({ bar, rect }: { bar: TimelineBar; rect: DOMRect }) {
   const r = bar.record
+  const width = 300
+  const margin = 8
+  const centerX = rect.left + rect.width / 2
+  const left = Math.min(Math.max(centerX - width / 2, margin), window.innerWidth - width - margin)
+  // 默认贴在横条下方；下方空间不足则翻到上方
+  const below = rect.bottom + 8
+  const flip = below + 90 > window.innerHeight
   return (
     <div
       role="tooltip"
-      className="pointer-events-none absolute top-full left-1/2 z-30 mt-1 w-max max-w-[320px] -translate-x-1/2 rounded-ctl px-2.5 py-1.5 text-[11px] leading-4 text-white shadow-lg"
-      style={{ backgroundColor: 'rgba(15,23,42,.94)' }}
+      className="pointer-events-none fixed z-50 rounded-ctl px-2.5 py-1.5 text-[11px] leading-4 text-white shadow-lg"
+      style={{
+        backgroundColor: 'rgba(15,23,42,.94)',
+        left,
+        width,
+        top: flip ? undefined : below,
+        bottom: flip ? window.innerHeight - rect.top + 8 : undefined,
+      }}
     >
       <div className="flex items-center gap-1.5">
         <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: r.categoryColor }} aria-hidden />
@@ -248,7 +287,7 @@ function BarTooltip({ bar }: { bar: { record: { categoryName: string; categoryCo
         <span className="opacity-60">·</span>
         <span className="truncate">{r.appName}</span>
       </div>
-      {r.windowTitle && <div className="mt-0.5 max-w-[300px] truncate opacity-75">{r.windowTitle}</div>}
+      {r.windowTitle && <div className="mt-0.5 truncate opacity-75">{r.windowTitle}</div>}
       <div className="tnum mt-0.5 opacity-90">
         {r.startLabel} – {r.endLabel} · {Math.round(r.durationMinutes)} 分钟
       </div>
@@ -272,8 +311,9 @@ function TimelineDetailDialog({
           title="时间线明细"
           description={`${model.recordCount} 条记录 · 总时长 ${(model.totalMinutes / 60).toFixed(1)}h · 专注率 ${model.focusRate}%`}
         />
-        <DialogBody className="max-h-[64dvh] overflow-y-auto p-0">
-          <table className="w-full text-[12px]">
+        {/* 纵向滚动是必要的（最多数百条），但不允许出现横向滚动条 */}
+        <DialogBody className="max-h-[64dvh] overflow-x-hidden overflow-y-auto p-0">
+          <table className="w-full table-fixed text-[12px]">
             <thead className="sticky top-0 z-10 bg-surface text-left text-[11px] text-text-3">
               <tr>
                 <th className="w-[104px] px-3 py-2 font-medium">时刻</th>
