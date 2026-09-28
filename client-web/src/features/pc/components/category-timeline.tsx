@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Clock, Info } from 'lucide-react'
 import { Button, Card, CardTitle, Dialog, DialogBody, DialogContent, DialogHeader, EmptyState, InlineAlert, Skeleton, Switch } from '@/components/ui'
 import { cn } from '@/lib/utils'
@@ -64,6 +64,23 @@ export function CategoryTimeline({
     () => (showAllHours ? Array.from({ length: 24 }, (_, i) => i) : model.activeHours),
     [showAllHours, model.activeHours],
   )
+
+  /*
+   * 悬浮明细的清除时机：仅靠横条的 mouseleave 会漏掉几种路径——
+   * 指针从行间空隙移出、滚轮滚动后横条已移开、窗口失焦。
+   * 这里统一兜底清理，避免提示框「跟着鼠标赖着不走」。
+   */
+  const clearAnchor = useCallback(() => setAnchor(null), [])
+  useEffect(() => {
+    if (!anchor) return
+    window.addEventListener('blur', clearAnchor)
+    // 捕获阶段监听滚动（滚动容器可能是任意祖先），滚动即清除
+    window.addEventListener('scroll', clearAnchor, { capture: true, passive: true })
+    return () => {
+      window.removeEventListener('blur', clearAnchor)
+      window.removeEventListener('scroll', clearAnchor, { capture: true })
+    }
+  }, [anchor, clearAnchor])
 
   const empty = !loading && !error && model.recordCount === 0
   return (
@@ -156,8 +173,10 @@ export function CategoryTimeline({
             {/*
               不要滚动条：纵向不再限高（24 行全部展开，由页面整体滚动承担），
               横向用 overflow-hidden 兜住 100% 处的刻度线等亚像素溢出。
+              容器级 onMouseLeave 作为兜底：即使指针从行间空隙或图表边缘移出，
+              悬浮明细也必须消失（只靠横条自身的 mouseleave 会漏掉这些路径）。
             */}
-            <div className="overflow-hidden">
+            <div className="overflow-hidden" onMouseLeave={() => setAnchor(null)}>
               {rows.map((hour) => {
                 const bars = model.barsByHour.get(hour) ?? []
                 return (
@@ -244,6 +263,7 @@ function HourRow({
                 backgroundColor: b.categoryColor,
               }}
               onMouseEnter={(e) => onHover(b, e.currentTarget.getBoundingClientRect())}
+              onMouseLeave={() => onHover(null, new DOMRect())}
               onFocus={(e) => onHover(b, e.currentTarget.getBoundingClientRect())}
               onBlur={() => onHover(null, new DOMRect())}
               aria-label={`${b.record.categoryName} ${b.record.appName} ${b.record.startLabel} 至 ${b.record.endLabel} ${Math.round(b.record.durationMinutes)} 分钟`}
