@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { EChartsBox, asTooltipItem, chartTooltip, isTooltipList } from '@/components/viz/echarts-box'
-import { DayGanttBars } from '@/components/viz/day-gantt-bars'
-import { KeyboardMatrix } from '@/components/viz/keyboard-matrix'
 import { MouseHeatmap } from '@/components/viz/mouse-heatmap'
 import { GitHubHeatmap, HeatMatrix, HEAT_RAMP_BLUE } from '@/components/viz/github-heatmap'
+import { KeyboardMatrix } from '@/components/viz/keyboard-matrix'
+import { CategoryTimeline } from '../components/category-timeline'
 import {
   useActivityAnalysis,
   useAppUsage,
@@ -21,7 +21,7 @@ import {
   useContextSuggestions,
 } from '../queries'
 import { todayBusinessDay, businessDayShift } from '@/lib/businessDay'
-import { formatRange } from '@/lib/datetime'
+
 import { Button, Card, CardTitle, Chip, EmptyState, Input, PageHeader, Segmented, Skeleton, StatusBadge } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { notifyError, notifySuccess } from '@/lib/notify'
@@ -66,19 +66,6 @@ export function PcTrackerPage() {
     return { start: businessDayShift(date, -days + 1), end: date }
   }, [mode, range, dimension, date])
   const heatGrid = useHeatmapGrid(heatRange.start, heatRange.end, dimension, true, force)
-
-  /* 甘特时间线段（仅单日有分钟级时间线） */
-  const ganttSegments = useMemo(
-    () =>
-      (summary.data?.timeline ?? []).map((t) => ({
-        start: t.start,
-        end: t.end,
-        label: t.appName,
-        color: t.categoryColor || '#3B82F6',
-        tooltip: `${formatRange(t.start, t.end)} · ${t.categoryName} · ${t.windowTitle ?? ''}`,
-      })),
-    [summary.data],
-  )
 
   /* 环形：分类占比 */
   const pieOption = useMemo(() => {
@@ -336,18 +323,27 @@ export function PcTrackerPage() {
         </Card>
       </div>
 
-      {/* 分类时间线（甘特，仅单日有分钟级 timeline） */}
+      {/*
+        分类时间线（每小时一行的时间条图；仅单日有分钟级 timeline）。
+        数据直接透传 summary.timeline —— 组件自身不发请求，时刻按 +08:00 墙钟解释。
+      */}
       {mode === 'day' && (
-        <Card className="p-4">
-          <CardTitle>分类时间线</CardTitle>
-          <div className="mt-3">
-            {ganttSegments.length === 0 ? (
-              <EmptyState size="sm" title="当日暂无活动时间线" />
-            ) : (
-              <DayGanttBars segments={ganttSegments} height={30} />
-            )}
-          </div>
-        </Card>
+        <CategoryTimeline
+          timeline={summary.data?.timeline}
+          loading={summary.isLoading}
+          /*
+           * 错误信息必须显式提取：失败时 summary.data 为 undefined，
+           * 若只传 data?.timeline，组件会把「请求失败」显示成「暂无数据」。
+           */
+          error={
+            summary.isError
+              ? summary.error instanceof Error
+                ? summary.error.message
+                : '无法获取该业务日的记录'
+              : null
+          }
+          subtitle={`业务日 ${date}（+08:00 墙钟）`}
+        />
       )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

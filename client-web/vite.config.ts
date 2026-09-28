@@ -16,7 +16,18 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    /*
+     * 端口 5173 落进 Windows 保留区间 5141–5240（见 netsh excludedportrange），
+     * 绑定会 EACCES；该区间内 5174/5175… 同样不可用，故自动递增也救不回来。
+     * 改用未保留的 3000，strictPort 固定以免静默漂移；需要时用 PIM_DEV_PORT 覆盖。
+     */
+    port: Number(process.env.PIM_DEV_PORT ?? 3000),
+    strictPort: true,
+    /*
+     * 显式绑定 127.0.0.1：Vite 默认只监听 ::1（IPv6），
+     * 导致 http://127.0.0.1:3000 及部分工具连不上。
+     */
+    host: '127.0.0.1',
     proxy: {
       '/api': {
         target: API_TARGET,
