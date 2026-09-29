@@ -146,15 +146,21 @@ export function useSuggestionActions() {
     void qc.invalidateQueries({ queryKey: ['pc'] })
     void qc.invalidateQueries({ queryKey: ['today'] })
   }
+  /*
+   * range 必须带 dateFrom/dateTo：后端 today 模式要求两者明确且相同
+   * （缺失时报「今天模式需要 DateFrom 和 DateTo 明确且相同。」）。
+   * date 为业务日（+08:00 口径），即重算该日的分类影响面。
+   */
+  const rangeFor = (date: string) => ({ mode: 'today' as const, dateFrom: date, dateTo: date })
   return {
     reject: useMutation({ mutationFn: (id: string) => pcApi.suggestReject(id), onSuccess: invalidate }),
     preview: useMutation({
-      mutationFn: ({ id, categoryName }: { id: string; categoryName?: string }) =>
-        pcApi.suggestPreview(id, { categoryName, range: { mode: 'today' } }),
+      mutationFn: ({ id, categoryName, date }: { id: string; categoryName?: string; date: string }) =>
+        pcApi.suggestPreview(id, { categoryName, range: rangeFor(date) }),
     }),
     apply: useMutation({
-      mutationFn: ({ id, categoryName }: { id: string; categoryName?: string }) =>
-        pcApi.suggestApply(id, { categoryName, range: { mode: 'today' } }),
+      mutationFn: ({ id, categoryName, date }: { id: string; categoryName?: string; date: string }) =>
+        pcApi.suggestApply(id, { categoryName, range: rangeFor(date) }),
       onSuccess: invalidate,
     }),
   }
