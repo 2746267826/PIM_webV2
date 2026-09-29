@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Clock, Info } from 'lucide-react'
 import { Button, Card, CardTitle, Dialog, DialogBody, DialogContent, DialogHeader, EmptyState, InlineAlert, Skeleton, Switch } from '@/components/ui'
+import { FloatingTooltip } from '@/components/viz/floating-tooltip'
 import { cn } from '@/lib/utils'
 import {
   buildTimelineModel,
@@ -277,30 +278,13 @@ function HourRow({
 
 /**
  * 悬停/聚焦明细：分类 · 应用名 / 窗口标题 / 起止 HH:mm / 时长（分钟，四舍五入）。
- * 用 position:fixed 依锚点矩形定位：容器是 overflow-hidden（为了不出现滚动条），
- * 行内绝对定位会被裁掉；固定定位脱离所有祖先裁剪，并自动避免超出视口左右边界。
+ * 用统一的 FloatingTooltip（position:fixed 依锚点矩形定位）：容器是
+ * overflow-hidden（为了不出现滚动条），行内绝对定位会被裁掉。
  */
 function BarTooltip({ bar, rect }: { bar: TimelineBar; rect: DOMRect }) {
   const r = bar.record
-  const width = 300
-  const margin = 8
-  const centerX = rect.left + rect.width / 2
-  const left = Math.min(Math.max(centerX - width / 2, margin), window.innerWidth - width - margin)
-  // 默认贴在横条下方；下方空间不足则翻到上方
-  const below = rect.bottom + 8
-  const flip = below + 90 > window.innerHeight
   return (
-    <div
-      role="tooltip"
-      className="pointer-events-none fixed z-50 rounded-ctl px-2.5 py-1.5 text-[11px] leading-4 text-white shadow-lg"
-      style={{
-        backgroundColor: 'rgba(15,23,42,.94)',
-        left,
-        width,
-        top: flip ? undefined : below,
-        bottom: flip ? window.innerHeight - rect.top + 8 : undefined,
-      }}
-    >
+    <FloatingTooltip anchor={rect} maxWidth={320}>
       <div className="flex items-center gap-1.5">
         <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: r.categoryColor }} aria-hidden />
         <span className="font-medium">{r.categoryName}</span>
@@ -311,7 +295,7 @@ function BarTooltip({ bar, rect }: { bar: TimelineBar; rect: DOMRect }) {
       <div className="tnum mt-0.5 opacity-90">
         {r.startLabel} – {r.endLabel} · {Math.round(r.durationMinutes)} 分钟
       </div>
-    </div>
+    </FloatingTooltip>
   )
 }
 

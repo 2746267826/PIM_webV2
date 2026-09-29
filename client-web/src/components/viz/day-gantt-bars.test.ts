@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { placeTooltip } from './day-gantt-bars'
+import { placeTooltip } from './floating-tooltip'
 
 const VP = { width: 1280, height: 720 }
 

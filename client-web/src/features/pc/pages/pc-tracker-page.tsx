@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { EChartsBox, asTooltipItem, chartTooltip, isTooltipList } from '@/components/viz/echarts-box'
 import { MouseHeatmap } from '@/components/viz/mouse-heatmap'
-import { GitHubHeatmap, HEAT_RAMP_BLUE } from '@/components/viz/github-heatmap'
+import { GitHubHeatmap, HEAT_RAMP_BLUE, HEAT_RAMP_ORANGE } from '@/components/viz/github-heatmap'
 import { KeyboardMatrix } from '@/components/viz/keyboard-matrix'
 import { CategoryTimeline } from '../components/category-timeline'
 import {
@@ -407,24 +407,24 @@ export function PcTrackerPage() {
         </Card>
       )}
 
-      {/* 范围（大统计）：深夜趋势 + 时长分布 */}
+      {/* 范围（大统计）：深夜热力 + 分类时长分布 */}
       {mode === 'range' && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <Card className="p-4">
-            <CardTitle>深夜使用（范围内）</CardTitle>
-            <div className="mt-2 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle>深夜使用热力</CardTitle>
+              <span className="text-xs text-text-4">每天 00:00–04:00 的使用分钟</span>
+            </div>
+            <div className="mt-3">
               {(lateNight.data?.items?.length ?? 0) === 0 ? (
-                <p className="py-3 text-center text-[13px] text-text-4">暂无数据</p>
+                <p className="py-4 text-center text-[13px] text-text-4">暂无数据</p>
               ) : (
-                lateNight.data!.items.slice(0, 6).map((d) => (
-                  <div key={d.date} className="flex items-center gap-3 text-[13px]">
-                    <span className="tnum shrink-0 text-text-3">{d.date.slice(5)}</span>
-                    <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-2">
-                      <div className="h-full rounded-full bg-warn" style={{ width: `${Math.min(100, d.minutes)}%` }} />
-                    </div>
-                    <span className={cn('tnum shrink-0', d.minutes > 0 ? 'text-warn' : 'text-text-4')}>{d.minutes} 分钟</span>
-                  </div>
-                ))
+                <GitHubHeatmap
+                  days={(lateNight.data?.items ?? []).map((d) => ({ date: d.date, value: d.minutes }))}
+                  ramp={HEAT_RAMP_ORANGE}
+                  formatValue={(v) => `深夜 ${v} 分钟`}
+                  emptyLabel="无深夜使用"
+                />
               )}
             </div>
           </Card>
