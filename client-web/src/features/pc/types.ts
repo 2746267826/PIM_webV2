@@ -79,6 +79,8 @@ export interface PcActivityAnalysis {
     pendingClassificationCount: number
     contextSwitchCount: number
     categories: { categoryName: string; color: string; durationSeconds: number }[]
+    /** 块内应用分布（后端实际返回，规格漏列） */
+    apps: { appName: string; durationSeconds: number }[]
   }[]
 }
 

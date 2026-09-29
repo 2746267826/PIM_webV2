@@ -21,13 +21,17 @@ import {
   useContextSuggestions,
 } from '../queries'
 import { todayBusinessDay, businessDayShift } from '@/lib/businessDay'
+import { buildHourlyHeatRows } from '../components/hourly-heat'
 
-import { Button, Card, CardTitle, Chip, EmptyState, Input, PageHeader, Segmented, Skeleton, StatusBadge } from '@/components/ui'
+import { Button, Card, CardTitle, Chip, EmptyState, Input, PageHeader, Segmented, Skeleton, StatusBadge, Switch } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { notifyError, notifySuccess } from '@/lib/notify'
 
 type Dimension = 'hour' | 'day' | 'month' | 'year'
 type Mode = 'day' | 'range'
+
+/** 服务端强度档（0–5）→ 颜色：0 档为空底，1–5 由浅到深 */
+const INTENSITY_RAMP = ['#E2E8F0', '#DBEAFE', '#93C5FD', '#60A5FA', '#3B82F6', '#1D4ED8']
 
 /** 维度 → 默认时间跨度（天）与网格形态说明 */
 const DIMENSION_DAYS: Record<Dimension, number> = { hour: 1, day: 7, month: 84, year: 365 }
@@ -45,6 +49,8 @@ export function PcTrackerPage() {
   const [dimension, setDimension] = useState<Dimension>('day')
   /* 强制刷新：穿透服务端聚合缓存（force=true，规格 04 §7） */
   const [force, setForce] = useState(false)
+  /* 时间块热力：是否显示全部 24 小时（默认仅显示有活跃的小时） */
+  const [showAllHours, setShowAllHours] = useState(false)
 
   const scope = mode === 'day' ? { date } : { start: range.start, end: range.end }
   const summary = usePcSummary(date, force, mode === 'day')
@@ -66,6 +72,16 @@ export function PcTrackerPage() {
     return { start: businessDayShift(date, -days + 1), end: date }
   }, [mode, range, dimension, date])
   const heatGrid = useHeatmapGrid(heatRange.start, heatRange.end, dimension, true, force)
+
+  /*
+   * 时间块热力的逐小时数据（合并逻辑见 hourly-heat.ts）：
+   * 条形取 summary.heatmap（覆盖完整），待分类/主要应用取 activity-analysis（仅它提供），
+   * 按 +08:00 本地小时对齐。时刻换算不使用浏览器本地时区。
+   */
+  const hourlyRows = useMemo(
+    () => buildHourlyHeatRows(summary.data?.heatmap, activity.data?.blocks),
+    [summary.data, activity.data],
+  )
 
   /* 环形：分类占比 */
   const pieOption = useMemo(() => {
@@ -347,27 +363,54 @@ export function PcTrackerPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {/* 时间块热力（单日 60 分钟分块） */}
+        {/* 时间块热力（单日逐小时；条宽=该小时活跃分钟占比，颜色=服务端强度档） */}
         {mode === 'day' && (
           <Card className="p-4">
-            <CardTitle>时间块热力（60 分钟）</CardTitle>
-            <div className="mt-3 space-y-1.5">
-              {(activity.data?.blocks ?? []).map((b) => (
-                <div key={b.start} className="flex items-center gap-2" title={`活跃 ${Math.round(b.activeDurationSeconds / 60)} 分钟 · 切换 ${b.contextSwitchCount} 次`}>
-                  <span className="tnum w-10 shrink-0 text-[11px] text-text-4">{b.start.slice(11, 16)}</span>
-                  <div className="h-4 flex-1 overflow-hidden rounded-full bg-surface-2">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${Math.min(100, b.intensityScore)}%`, backgroundColor: b.intensityScore > 66 ? '#1D4ED8' : b.intensityScore > 33 ? '#3B82F6' : '#93C5FD' }}
-                    />
-                  </div>
-                  {b.pendingClassificationCount > 0 && (
-                    <StatusBadge tone="warn" dot={false} className="shrink-0">{b.pendingClassificationCount} 待分类</StatusBadge>
-                  )}
-                </div>
-              ))}
-              {(activity.data?.blocks?.length ?? 0) === 0 && <p className="py-4 text-center text-[13px] text-text-4">暂无数据</p>}
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle>时间块热力（60 分钟）</CardTitle>
+              <span className="ml-auto">
+                <Switch checked={showAllHours} onCheckedChange={setShowAllHours} />
+              </span>
+              <label className="cursor-pointer text-[11px] text-text-4" onClick={() => setShowAllHours((v) => !v)}>
+                显示全部 24 小时
+              </label>
             </div>
+            <div className="mt-3 space-y-1.5">
+              {hourlyRows.length === 0 ? (
+                <p className="py-4 text-center text-[13px] text-text-4">暂无数据</p>
+              ) : (
+                (showAllHours ? hourlyRows : hourlyRows.filter((r) => r.activeMinutes > 0)).map((row) => (
+                  <div
+                    key={row.hour}
+                    className="flex items-center gap-2"
+                    title={[
+                      `${row.label} 活跃 ${row.activeMinutes} 分钟`,
+                      row.totalEvents > 0 ? `事件 ${row.totalEvents}` : null,
+                      row.intensity > 0 ? `强度 ${row.intensity}/5` : null,
+                      row.pending > 0 ? `待分类 ${row.pending} 条` : null,
+                      row.topApp ? `主要：${row.topApp}` : null,
+                    ].filter(Boolean).join(' · ')}
+                  >
+                    <span className="tnum w-10 shrink-0 text-[11px] text-text-4">{row.label}</span>
+                    <div className="h-4 flex-1 overflow-hidden rounded-full bg-surface-2">
+                      <div
+                        className="h-full rounded-full transition-[width] duration-200"
+                        style={{
+                          width: `${Math.min(100, (row.activeMinutes / 60) * 100)}%`,
+                          backgroundColor: INTENSITY_RAMP[Math.min(5, Math.max(1, row.intensity))],
+                        }}
+                      />
+                    </div>
+                    {row.pending > 0 && (
+                      <StatusBadge tone="warn" dot={false} className="shrink-0">{row.pending} 待分类</StatusBadge>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+            <p className="mt-2 text-[11px] text-text-4">
+              条宽 = 该小时活跃分钟占 60 分钟的比例；颜色 = 服务端强度档（1–5）。
+            </p>
           </Card>
         )}
 
