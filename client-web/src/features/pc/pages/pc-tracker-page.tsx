@@ -486,24 +486,26 @@ export function PcTrackerPage() {
       </div>
       )}
 
-      {/* 键盘 + 鼠标热力 */}
-      <Card className="p-4">
-        <div className="flex items-center gap-2">
-          <CardTitle>键盘热力图</CardTitle>
-          <span className="tnum ml-auto text-xs text-text-4">峰值 KPS {ks?.peakKps ?? 0} · CPS {ks?.peakCps ?? 0}</span>
-        </div>
-        <div className="mt-3 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
-          <KeyboardMatrix keyCounts={ks?.keyPressCounts ?? {}} />
-          <MouseHeatmap
-            left={ks?.leftClicks ?? 0}
-            middle={ks?.middleClicks ?? 0}
-            right={ks?.rightClicks ?? 0}
-            sideBack={ks?.sideBackClicks ?? 0}
-            sideForward={ks?.sideForwardClicks ?? 0}
-            scrollDistance={ks?.scrollDistance}
-          />
-        </div>
-      </Card>
+      {/* 键盘 + 鼠标热力（仅单日：summary 为单日接口，后端无范围版逐键聚合） */}
+      {mode === 'day' && (
+        <Card className="p-4">
+          <div className="flex items-center gap-2">
+            <CardTitle>键盘热力图</CardTitle>
+            <span className="tnum ml-auto text-xs text-text-4">峰值 KPS {ks?.peakKps ?? 0} · CPS {ks?.peakCps ?? 0}</span>
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
+            <KeyboardMatrix keyCounts={ks?.keyPressCounts ?? {}} />
+            <MouseHeatmap
+              left={ks?.leftClicks ?? 0}
+              middle={ks?.middleClicks ?? 0}
+              right={ks?.rightClicks ?? 0}
+              sideBack={ks?.sideBackClicks ?? 0}
+              sideForward={ks?.sideForwardClicks ?? 0}
+              scrollDistance={ks?.scrollDistance}
+            />
+          </div>
+        </Card>
+      )}
 
       {/* 标注队列 + 上下文建议（仅单日：建议按业务日查询，重算也以该日为影响面） */}
       {mode === 'day' && (
