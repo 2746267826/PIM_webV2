@@ -378,56 +378,49 @@ export function PcTrackerPage() {
         />
       )}
 
-      {/* 范围（大统计）：活动热力（GitHub 贡献图风格，按天聚合） */}
+      {/* 范围（大统计）：两张热力图并排（窄屏自动堆叠） + 分类时长分布 */}
       {mode === 'range' && (
-        <Card className="p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <CardTitle>活动热力</CardTitle>
-            <span className="text-xs text-text-4">{range.start} ~ {range.end}</span>
-            {heatDataRange && (
-              <span className="text-xs text-text-4">· 有效数据 {heatDataRange}</span>
-            )}
+        <>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <Card className="p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle>活动热力</CardTitle>
+                <span className="text-xs text-text-4">每天活动强度</span>
+                {heatDataRange && <span className="text-xs text-text-4">· 有效数据 {heatDataRange}</span>}
+              </div>
+              <div className="mt-3">
+                {heatCells.length === 0 ? (
+                  <EmptyState size="sm" title="暂无数据" />
+                ) : (
+                  <GitHubHeatmap
+                    days={heatCells}
+                    ramp={HEAT_RAMP_BLUE}
+                    formatValue={(v) => `强度 ${v}`}
+                    maxWeeks={27}
+                  />
+                )}
+              </div>
+            </Card>
+            <Card className="p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle>深夜使用热力</CardTitle>
+                <span className="text-xs text-text-4">每天 00:00–04:00 的使用分钟</span>
+              </div>
+              <div className="mt-3">
+                {(lateNight.data?.items?.length ?? 0) === 0 ? (
+                  <p className="py-4 text-center text-[13px] text-text-4">暂无数据</p>
+                ) : (
+                  <GitHubHeatmap
+                    days={(lateNight.data?.items ?? []).map((d) => ({ date: d.date, value: d.minutes }))}
+                    ramp={HEAT_RAMP_ORANGE}
+                    formatValue={(v) => `深夜 ${v} 分钟`}
+                    emptyLabel="无深夜使用"
+                  />
+                )}
+              </div>
+            </Card>
           </div>
-          <div className="mt-3">
-            {heatCells.length === 0 ? (
-              <EmptyState size="sm" title="暂无数据" />
-            ) : (
-              <GitHubHeatmap
-                days={heatCells}
-                ramp={HEAT_RAMP_BLUE}
-                formatValue={(v) => `强度 ${v}`}
-                maxWeeks={27}
-              />
-            )}
-          </div>
-          <p className="mt-2 text-[11px] text-text-4">
-            每格一天，颜色深浅 = 当天活动强度。服务端按 UTC 日切桶（见 docs/backend-issues.md PC-4），
-            对 +08:00 用户相邻日的活跃可能偏移一天。
-          </p>
-        </Card>
-      )}
 
-      {/* 范围（大统计）：深夜热力 + 分类时长分布 */}
-      {mode === 'range' && (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <Card className="p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <CardTitle>深夜使用热力</CardTitle>
-              <span className="text-xs text-text-4">每天 00:00–04:00 的使用分钟</span>
-            </div>
-            <div className="mt-3">
-              {(lateNight.data?.items?.length ?? 0) === 0 ? (
-                <p className="py-4 text-center text-[13px] text-text-4">暂无数据</p>
-              ) : (
-                <GitHubHeatmap
-                  days={(lateNight.data?.items ?? []).map((d) => ({ date: d.date, value: d.minutes }))}
-                  ramp={HEAT_RAMP_ORANGE}
-                  formatValue={(v) => `深夜 ${v} 分钟`}
-                  emptyLabel="无深夜使用"
-                />
-              )}
-            </div>
-          </Card>
           <Card className="p-4">
             <CardTitle>分类时长分布</CardTitle>
             <div className="mt-2">
@@ -438,7 +431,7 @@ export function PcTrackerPage() {
               )}
             </div>
           </Card>
-        </div>
+        </>
       )}
 
       {/* 范围（大统计）：应用时长排行 */}

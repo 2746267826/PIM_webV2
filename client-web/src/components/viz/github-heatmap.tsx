@@ -69,8 +69,10 @@ export function levelFor(value: number, th: readonly [number, number, number] | 
 export interface GitHubHeatmapProps {
   /** 数据点（任意顺序，内部按 date 索引） */
   days: HeatDay[]
-  /** 单元尺寸下限（px），默认 11；容器足够宽时自动放大（上限 22） */
+  /** 单元尺寸下限（px），默认 11；容器足够宽时自动放大 */
   cellSize?: number
+  /** 单元尺寸上限（px），默认 26（短范围靠放大填满容器） */
+  maxCellSize?: number
   /** 单元间距（px），默认 3 */
   gap?: number
   /** 色阶，默认蓝色系 */
@@ -84,20 +86,31 @@ export interface GitHubHeatmapProps {
   className?: string
   /** 显示的周数上限（超出则只保留最近 N 周），默认 53（约一年） */
   maxWeeks?: number
+  /**
+   * 布局方向：
+   * - 'vertical'（默认，GitHub 原版）：列 = 周、行 = 星期，适合长范围（≥ 数周）；
+   * - 'horizontal'：行 = 周、列 = 星期，适合短范围（1–2 周）——
+   *   纵向布局在只有 1–2 列时会缩成一条，横向铺开才看得清。
+   * 'auto' 按周数自动选择（≤ 3 周用横向）。
+   */
+  layout?: 'vertical' | 'horizontal' | 'auto'
 }
 
-/** 每格默认 11px；容器宽时最大放大到 22px */
+/** 每格默认 11px；容器宽时放大（上限见 maxCellSize） */
 const MIN_CELL = 11
-const MAX_CELL = 22
+/** 纵向格子上限：两张热力并排（各约 490px）放 13 周时需 ~32px 才不显得空 */
+const DEFAULT_MAX_CELL = 32
 const LABEL_W = 22 // 星期标签列宽 + 间距
 
 /**
  * 按天序列 → GitHub 贡献图。
- * 自动补全区间内的空缺日（空值渲染为最浅色），列=周、行=星期。
+ * 自动补全区间内的空缺日（空值渲染为最浅色）。
+ * vertical：列=周、行=星期；horizontal：行=周、列=星期（短范围用）。
  */
 export function GitHubHeatmap({
   days,
   cellSize,
+  maxCellSize = DEFAULT_MAX_CELL,
   gap = 3,
   ramp = HEAT_RAMP_BLUE,
   unit = '',
@@ -105,6 +118,7 @@ export function GitHubHeatmap({
   emptyLabel = '无记录',
   className,
   maxWeeks = 53,
+  layout = 'auto',
 }: GitHubHeatmapProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [availW, setAvailW] = useState(0)
@@ -171,11 +185,26 @@ export function GitHubHeatmap({
     return { weeks: trimmed, monthMarks, thresholds, total: days.reduce((a, d) => a + d.value, 0) }
   }, [days, maxWeeks])
 
-  /* 格径自适应：列数少时放大格子填满容器（不超过 MAX_CELL） */
+  /*
+   * 布局选择：周数少（≤ 6 周，约 1–1.5 个月）时改用横向——
+   * 纵向布局在这种长度下只有 1–6 列，会缩成一条竖线，横向铺开才看得清。
+   */
+  const resolved = layout === 'auto' ? (model.weeks.length <= 6 ? 'horizontal' : 'vertical') : layout
   const weeks = model.weeks.length
-  const fitted = availW > 0 ? Math.floor((availW - LABEL_W - Math.max(0, weeks - 1) * gap) / Math.max(1, weeks)) : MIN_CELL
-  const size = Math.max(cellSize ?? MIN_CELL, Math.min(fitted, MAX_CELL))
-  const totalW = weeks * (size + gap) - gap
+
+  /*
+   * 格径自适应：把可用宽度尽量用满。
+   * 纵向列多（周数）时上限 26px，避免格子过大反而不像贡献图；
+   * 横向列固定 7，可放大到接近日历格（含日数标签）。
+   */
+  const cols = resolved === 'horizontal' ? 7 : weeks
+  const labelW = resolved === 'horizontal' ? 34 : LABEL_W
+  const cap = resolved === 'horizontal' ? Math.max(maxCellSize, 56) : maxCellSize
+  const fitted = availW > 0 ? Math.floor((availW - labelW - Math.max(0, cols - 1) * gap) / Math.max(1, cols)) : MIN_CELL
+  const size = Math.max(cellSize ?? MIN_CELL, Math.min(fitted, cap))
+  const totalW = cols * (size + gap) - gap
+  /* 格子足够大时直接把日数写进格内（短范围可读性大幅提升） */
+  const showDayNumber = size >= 34
 
   const fmt = formatValue ?? ((v: number) => v.toLocaleString())
 
@@ -185,6 +214,33 @@ export function GitHubHeatmap({
       return `${cell.date} 周${WEEKDAY_LABELS[mondayIndex(d)]} · ${fmt(cell.value)}${unit}${cell.detail ? ` · ${cell.detail}` : ''}`
     }
     return `${cell.date} · ${emptyLabel}`
+  }
+
+  const renderCell = (cell: HeatDay | null, key: number) => {
+    if (!cell) return <div key={key} style={{ width: size, height: size }} aria-hidden />
+    const level = levelFor(cell.value, model.thresholds)
+    const day = parseLocalDate(cell.date).getDate()
+    return (
+      <button
+        key={key}
+        type="button"
+        className={cn(
+          'relative flex items-center justify-center rounded-[2px] transition-[transform,box-shadow] duration-100',
+          'hover:z-10 hover:scale-110 hover:shadow-md focus:z-10 focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-ring',
+        )}
+        style={{ width: size, height: size, backgroundColor: ramp[level] }}
+        onMouseEnter={(e) => setAnchor({ rect: e.currentTarget.getBoundingClientRect(), text: cellTitle(cell), color: ramp[level] })}
+        onFocus={(e) => setAnchor({ rect: e.currentTarget.getBoundingClientRect(), text: cellTitle(cell), color: ramp[level] })}
+        onBlur={() => setAnchor(null)}
+        aria-label={cellTitle(cell)}
+      >
+        {showDayNumber && (
+          <span className={cn('tnum text-[11px] leading-none', level >= 3 ? 'text-white' : 'text-text-2')} aria-hidden>
+            {day}
+          </span>
+        )}
+      </button>
+    )
   }
 
   if (model.weeks.length === 0) {
@@ -197,63 +253,75 @@ export function GitHubHeatmap({
       className={cn('w-full', totalW > availW ? 'overflow-x-auto' : 'overflow-x-hidden', className)}
       onMouseLeave={() => setAnchor(null)}
     >
-      {/* 放得下时居中，避免一侧大片留白 */}
+      {/* 放得下时居中，避免单侧大片留白 */}
       <div className={cn('inline-block min-w-full', totalW <= availW && 'flex justify-center')}>
         <div className="inline-block">
-          {/* 月份标签 */}
-          <div className="relative mb-1 h-3.5" style={{ width: totalW, marginLeft: LABEL_W }}>
-            {model.monthMarks.map((mk) => (
-              <span
-                key={`${mk.col}-${mk.label}`}
-                className="absolute text-[10px] text-text-4"
-                style={{ left: mk.col * (size + gap) }}
-              >
-                {mk.label}
-              </span>
-            ))}
-          </div>
+          {resolved === 'horizontal' ? (
+            <>
+              {/* 列头：星期 */}
+              <div className="flex" style={{ gap, marginLeft: labelW }}>
+                {WEEKDAY_LABELS.map((w) => (
+                  <span key={w} className="text-center text-[10px] text-text-4" style={{ width: size }}>
+                    {w}
+                  </span>
+                ))}
+              </div>
+              {/* 行 = 周 */}
+              <div className="mt-1">
+                {model.weeks.map((week, wi) => {
+                  const firstDay = week.find(Boolean)
+                  const label = firstDay ? firstDay.date.slice(5).replace('-', '/') : ''
+                  return (
+                    <div key={wi} className="flex items-center" style={{ gap, marginBottom: gap }}>
+                      <span className="tnum shrink-0 pr-1 text-right text-[10px] text-text-4" style={{ width: labelW - 4 }}>
+                        {label}
+                      </span>
+                      {Array.from({ length: 7 }, (_, di) => renderCell(week[di] ?? null, di))}
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* 月份标签 */}
+              <div className="relative mb-1 h-3.5" style={{ width: totalW, marginLeft: LABEL_W }}>
+                {model.monthMarks.map((mk) => (
+                  <span
+                    key={`${mk.col}-${mk.label}`}
+                    className="absolute text-[10px] text-text-4"
+                    style={{ left: mk.col * (size + gap) }}
+                  >
+                    {mk.label}
+                  </span>
+                ))}
+              </div>
 
-          <div className="flex gap-1.5">
-            {/* 星期标签（只标周一/三/五，与 GitHub 一致） */}
-            <div className="flex shrink-0 flex-col" style={{ gap }}>
-              {WEEKDAY_LABELS.map((w, i) => (
-                <span
-                  key={w}
-                  className="text-[9px] leading-none text-text-4"
-                  style={{ height: size, width: 16, lineHeight: `${size}px` }}
-                >
-                  {i % 2 === 0 ? w : ''}
-                </span>
-              ))}
-            </div>
-
-            {/* 周列 */}
-            <div className="flex" style={{ gap }}>
-              {model.weeks.map((week, col) => (
-                <div key={col} className="flex flex-col" style={{ gap }}>
-                  {Array.from({ length: 7 }, (_, row) => {
-                    const cell = week[row]
-                    if (!cell) {
-                      return <div key={row} style={{ width: size, height: size }} aria-hidden />
-                    }
-                    const level = levelFor(cell.value, model.thresholds)
-                    return (
-                      <button
-                        key={row}
-                        type="button"
-                        className="rounded-[2px] transition-[transform,box-shadow] duration-100 hover:z-10 hover:scale-125 hover:shadow-md focus:z-10 focus:outline-none focus-visible:outline-2 focus-visible:outline-primary-ring"
-                        style={{ width: size, height: size, backgroundColor: ramp[level] }}
-                        onMouseEnter={(e) => setAnchor({ rect: e.currentTarget.getBoundingClientRect(), text: cellTitle(cell), color: ramp[level] })}
-                        onFocus={(e) => setAnchor({ rect: e.currentTarget.getBoundingClientRect(), text: cellTitle(cell), color: ramp[level] })}
-                        onBlur={() => setAnchor(null)}
-                        aria-label={cellTitle(cell)}
-                      />
-                    )
-                  })}
+              <div className="flex gap-1.5">
+                {/* 星期标签（只标周一/三/五，与 GitHub 一致） */}
+                <div className="flex shrink-0 flex-col" style={{ gap }}>
+                  {WEEKDAY_LABELS.map((w, i) => (
+                    <span
+                      key={w}
+                      className="text-[9px] leading-none text-text-4"
+                      style={{ height: size, width: 16, lineHeight: `${size}px` }}
+                    >
+                      {i % 2 === 0 ? w : ''}
+                    </span>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+
+                {/* 周列 */}
+                <div className="flex" style={{ gap }}>
+                  {model.weeks.map((week, col) => (
+                    <div key={col} className="flex flex-col" style={{ gap }}>
+                      {Array.from({ length: 7 }, (_, row) => renderCell(week[row] ?? null, row))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* 图例 */}
           <div className="mt-2 flex items-center justify-end gap-1.5 text-[10px] text-text-4">
