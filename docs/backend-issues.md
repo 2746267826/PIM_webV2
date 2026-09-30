@@ -152,11 +152,20 @@ curl 'http://127.0.0.1:3000/api/v1/pc/activity-analysis?date=2026-09-27&blockMin
 ### GAP-1 键鼠逐键分布没有范围版聚合
 
 `summary.keystats`（keyPressCounts / 左右键 / 滚轮）只支持单日 `date`；
-聚合组（`/pc/aggregation/*`）没有键盘/鼠标维度的接口。
+聚合组（`/pc/aggregation/*`，共 4 个：focus-blocks / app-usage / late-night /
+category-distribution）没有键盘/鼠标维度的接口。
 导致范围模式（近 30/90 天）下「键盘热力图」「鼠标热力图」无数据可渲染，
 前端只能隐藏该卡片。
-建议：聚合组增加键盘/鼠标维度（按 range 汇总 keyPressCounts 与按键分布），
-前端即可在范围模式提供同样的键鼠热力。
+
+**替代方案不可行（已实测排除）**：`GET /pc/detail` 支持 `dateFrom/dateTo`
+且 `input-minute` 记录带 `keyCounts`，理论上前端可自行聚合；但记录量实测为
+**9.27 单日 658 条、近 30 天 15,246 条**（pageSize 上限 200 → 30 天需 77 次请求），
+90 天约 4.5 万条，前端逐页拉取聚合不可行。
+
+**建议**：聚合组增加键鼠维度，例如
+`GET /api/v1/pc/aggregation/keyboard?start&end`，
+返回 `{ keyCounts, leftClicks, middleClicks, rightClicks, scrollDistance, peakKps, peakCps }`。
+前端数据字段与单日版完全同构，后端就绪后把卡片恢复到范围模式只需去掉一层条件。
 
 ---
 
