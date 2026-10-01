@@ -17,6 +17,7 @@ import { EventEditorDialog } from '../components/event-editor-dialog'
 import { EventDetailDialog } from '../components/entity-detail-dialogs'
 import { TaskEditorDialog } from '../components/task-editor-dialog'
 import { InboxPanel } from '../components/inbox-panel'
+import { EventListView } from '../components/event-list-view'
 import type { EventResponse, LayerItem } from '../types'
 import { dayEndIso, dayStartIso, durationToMinutes, formatTime, toUtcIso } from '@/lib/datetime'
 import { summarizeLines } from '@/lib/text'
@@ -360,19 +361,48 @@ export function CalendarPage() {
    * 两套排版：常规（py 8 + 标题 16 + 其余 12）与紧凑（py 1 + 标题 14 + 其余 11）。
    * 高度 < 48px 时用紧凑排版，可以多放一行（如 45min 能显示标题+时间+1 行描述）。
    * 实测：15min≈16px→1 行、30min≈31px→2 行、45min≈46px→3 行、1h≈60px→4 行、100min≈102px→7 行。
-   * 挂载后量一次写入 data-density（应显示行数）与 data-compact（排版档位），
-   * 由皮肤 CSS 同时控制行高与第 n+1 行起的隐藏；
-   * 用 CSS 而非内联 style，可在视图切换/缩放后由 FC 重挂载自然重算。
+   *
+   * 档位写入 data-density（应显示行数）与 data-compact（排版档位），由皮肤 CSS 控制
+   * 行高与第 n+1 行起的隐藏。测量必须容忍「过渡值」：height="auto" 时 FullCalendar
+   * 要先量容器宽再定槽高，eventDidMount 常发生在定稿前——首次进入（URL 直开周视图）
+   * 会量到偏小的高度、只显示标题，切过周后才正常。因此挂载时先量一次（避免闪变），
+   * 再用共享 ResizeObserver 兜底：布局定稿/窗口缩放引起的高度变化都会重测覆盖。
    */
-  function onEventDidMount(arg: { el: HTMLElement; view: { type: string } }) {
-    if (arg.view.type.startsWith('dayGrid')) return
-    const h = arg.el.getBoundingClientRect().height
+  const densityObserverRef = useRef<ResizeObserver | null>(null)
+
+  function applyEventDensity(el: HTMLElement) {
+    const h = el.getBoundingClientRect().height
     const compact = h < 48
     const rows = compact
       ? Math.floor((h - 15) / 11) + 1 // 1 + 14 + 11(n-1)
       : Math.floor((h - 24) / 12) + 1 // 8 + 16 + 12(n-1)
-    if (compact) arg.el.dataset.compact = '1'
-    arg.el.dataset.density = String(Math.max(1, Math.min(7, rows)))
+    if (compact) el.dataset.compact = '1'
+    else delete el.dataset.compact
+    el.dataset.density = String(Math.max(1, Math.min(7, rows)))
+  }
+
+  function ensureDensityObserver(): ResizeObserver {
+    densityObserverRef.current ??= new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const el = entry.target as HTMLElement
+        if (!el.isConnected) {
+          densityObserverRef.current?.unobserve(el)
+          continue
+        }
+        applyEventDensity(el)
+      }
+    })
+    return densityObserverRef.current
+  }
+
+  function onEventDidMount(arg: { el: HTMLElement; view: { type: string } }) {
+    if (arg.view.type.startsWith('dayGrid')) return
+    applyEventDensity(arg.el)
+    ensureDensityObserver().observe(arg.el)
+  }
+
+  function onEventWillUnmount(arg: { el: HTMLElement }) {
+    densityObserverRef.current?.unobserve(arg.el)
   }
 
   /* 拖选空白时段 → 预填日程编辑弹窗（仅时间轴视图） */
@@ -506,7 +536,8 @@ export function CalendarPage() {
         </div>
       </div>
 
-      {truncated && (
+      {/* 截断横幅仅网格视图需要（列表视图走无限分页装填，无 100 条上限问题） */}
+      {view !== 'list' && truncated && (
         <div className="mb-2 rounded-ctl border border-warn-border bg-warn-soft px-3 py-1.5 text-xs text-warn">
           当前窗口事件超过 100 条，仅显示前 100 条（可缩小时间范围查看更多）。
         </div>
@@ -539,8 +570,32 @@ export function CalendarPage() {
         </div>
       )}
 
-      {/* 日历主体 + 收件箱侧板（皮肤：谷歌竖条日视图 / 圆点行月视图） */}
-      <div className="flex min-h-0 flex-1 gap-4">
+      {/* 列表视图：自定义无限下滑列表（FC 仍挂载但隐藏——继续充当日期导航/数据窗口引擎） */}
+      {view === 'list' && (
+        <div className="flex min-h-0 flex-1 gap-4">
+          <EventListView
+            anchorStart={range.start}
+            calendarId={calendarId}
+            calendars={calendars}
+            layerToggles={layerToggles}
+            outlookOnly={layerToggles.outlookOnly}
+            onOpenEvent={setDetail}
+          />
+          <aside className="hidden w-[280px] shrink-0 lg:block">
+            <div className="h-full max-h-[calc(100dvh-8rem)] overflow-hidden rounded-card border border-border bg-bg shadow-card">
+              <InboxPanel
+                onNewTask={() => setTaskEditorOpen(true)}
+                onNewEvent={() =>
+                  setEventEditor({ mode: 'create', initial: { start: nextHour(), end: nextHourPlus() } })
+                }
+              />
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* 网格视图（时间轴/周/月）：列表模式下隐藏不卸载，prev/next 与 datesSet 继续工作 */}
+      <div className={cn('flex min-h-0 flex-1 gap-4', view === 'list' && 'hidden')}>
         {/* 日历网格自身滚动：收件箱侧板因此常驻可见（主滚动容器在外壳 main 上） */}
         <div className="skin-gcal min-w-0 flex-1 overflow-y-auto select-none [&_.fc-event-mirror]:pointer-events-none">
           <FullCalendar
@@ -559,6 +614,7 @@ export function CalendarPage() {
             eventReceive={onEventReceive}
             eventClick={onEventClick}
             eventDidMount={onEventDidMount}
+            eventWillUnmount={onEventWillUnmount}
             height="auto"
             stickyHeaderDates
             allDaySlot

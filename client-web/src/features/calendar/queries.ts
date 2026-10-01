@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { deferredIntervalMs, standardIntervalMs } from '@/lib/polling'
 import { calendarsApi, checklistApi, eventsApi, layersApi, segmentsApi, taskBooksApi, tasksApi } from './api'
 import type { TaskResponse, TasksPagedParams } from './types'
@@ -60,6 +60,23 @@ export function useEvents(start: string, end: string, enabled = true) {
     queryFn: () => eventsApi.listPaged({ start, end, page: 1, pageSize: 100 }),
     enabled,
     refetchInterval: () => deferredIntervalMs(),
+  })
+}
+
+/*
+ * 列表视图（自定义无限下滑）：固定大窗口 [start, end]（约两年）内按页装填，
+ * totalCount 到顶即 hasMore=false——「确实没有更多」由 totalCount 证明，
+ * 不需要「连续空窗口」这类启发式。注意后端不保证按开始时间排序，由
+ * event-list-model 统一排序分组。
+ */
+export function useEventsInfinite(start: string, end: string, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: [...calendarKeys.events(start, end), 'infinite'],
+    queryFn: ({ pageParam }) => eventsApi.listPaged({ start, end, page: pageParam, pageSize: 100 }),
+    initialPageParam: 1,
+    getNextPageParam: (last, _all, lastPage) =>
+      last.totalCount > lastPage * last.pageSize ? lastPage + 1 : undefined,
+    enabled,
   })
 }
 
