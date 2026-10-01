@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
+import listPlugin from '@fullcalendar/list'
 import interactionPlugin, { ThirdPartyDraggable } from '@fullcalendar/interaction'
 import zhCnLocale from '@fullcalendar/core/locales/zh-cn'
 import type { DatesSetArg, EventClickArg } from '@fullcalendar/core'
@@ -19,7 +20,7 @@ import { InboxPanel } from '../components/inbox-panel'
 import type { EventResponse, LayerItem } from '../types'
 import { dayEndIso, dayStartIso, durationToMinutes, formatTime, toUtcIso } from '@/lib/datetime'
 import { summarizeLines } from '@/lib/text'
-import { Chip, Button, Drawer, DrawerContent, PageHeader } from '@/components/ui'
+import { Chip, Button, Drawer, DrawerContent, PageHeader, Segmented } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { notifyError, notifySuccess } from '@/lib/notify'
 
@@ -49,15 +50,62 @@ const SHOW_AS_LABEL: Record<string, string> = {
   workingElsewhere: '异地工作',
 }
 
+/** 凌晨策略持久化键 */
+const DAWN_STORAGE_KEY = 'pim.calendarDawn'
+
+/** 业务日墙钟时区偏移：+08:00（与时间线组件同一口径，不依赖浏览器时区） */
+const CST_OFFSET_MS = 8 * 3600_000
+/** 时刻 → +08:00 墙钟分钟（0..1440） */
+function wallMinutes(ms: number): number {
+  const dayMs = 86_400_000
+  return (((ms + CST_OFFSET_MS) % dayMs) + dayMs) % dayMs / 60_000
+}
+
+/** 墙钟分钟 → 'HH:MM:00'（FullCalendar scrollTime/slotTime 格式） */
+function scrollTimeOf(minutes: number): string {
+  const clamped = Math.min(Math.max(Math.round(minutes), 0), 23 * 60 + 59)
+  const h = Math.floor(clamped / 60)
+  const m = clamped % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`
+}
+
 function showAsLabel(showAs: string | null | undefined): string | null {
   if (!showAs) return null
   return SHOW_AS_LABEL[showAs] ?? null
 }
 
-/** 日历页（02 §日历：时间轴/月视图 + 图层 chips + 拖选预填 + 收件箱拖入排期） */
+/** 日历视图：时间轴（单日）/ 周 / 月 / 列表 */
+type CalView = 'timeline' | 'week' | 'month' | 'list'
+
+const CAL_VIEW_TYPES: Record<CalView, string> = {
+  timeline: 'timeGridDay',
+  week: 'timeGridWeek',
+  month: 'dayGridMonth',
+  list: 'listWeek',
+}
+
+const CAL_VIEW_LABEL: Record<CalView, string> = {
+  timeline: '时间轴',
+  week: '周',
+  month: '月',
+  list: '列表',
+}
+
+/** 凌晨空档处理策略（时间轴/周视图） */
+type DawnStrategy = 'smart' | 'crop' | 'strip'
+
+const DAWN_LABEL: Record<DawnStrategy, string> = {
+  smart: '智能滚动',
+  crop: '裁剪空档',
+  strip: '刻度标记',
+}
+
+/** 日历页（02 §日历：时间轴/周/月/列表视图 + 图层 chips + 拖选预填 + 收件箱拖入排期） */
 export function CalendarPage() {
   const [params, setParams] = useSearchParams()
-  const view = (params.get('view') ?? 'timeline') === 'month' ? 'month' : 'timeline'
+  const viewParam = params.get('view') ?? 'timeline'
+  const view: CalView =
+    viewParam === 'week' || viewParam === 'month' || viewParam === 'list' ? viewParam : 'timeline'
   const calendarId = params.get('calendarId') ?? undefined
 
   const { layerToggles, toggleLayer } = useCalendarVisibility()
@@ -81,6 +129,24 @@ export function CalendarPage() {
     layerToggles.outlookOnly,
     layerToggles['task-segments'] || layerToggles.habits || layerToggles.availability || layerToggles['ai-placeholders'],
   )
+
+  /*
+   * 凌晨空档处理策略（时间轴/周视图）：
+   * - smart 智能滚动：渲染后自动滚到「当前时刻」（今天）或「首个日程前 30 分钟」，
+   *   整天无日程滚到 08:00；凌晨行保持原样。
+   * - crop 空档裁剪：没有日程的小时直接从坐标轴裁掉（slotMin/Max 按首末日程 ±1 小时），
+   *   一屏装下全天；范围里无日程则保持完整 00:00–24:00。
+   * - strip 刻度标记：保持完整 24 小时 + 顶部「小时分布条」，有日程的小时点亮，
+   *   点击标记跳到该小时——即使滚动到别处也能看出凌晨有没有日程。
+   */
+  const [dawn, setDawn] = useState<DawnStrategy>(() => {
+    const saved = localStorage.getItem(DAWN_STORAGE_KEY)
+    return saved === 'crop' || saved === 'strip' || saved === 'smart' ? saved : 'smart'
+  })
+  const setDawnPersist = (next: DawnStrategy) => {
+    setDawn(next)
+    localStorage.setItem(DAWN_STORAGE_KEY, next)
+  }
 
   const [eventEditor, setEventEditor] = useState<
     { mode: 'create'; initial: { start: Date; end: Date } } | { mode: 'edit'; event: EventResponse } | null
@@ -126,14 +192,142 @@ export function CalendarPage() {
     return list
   }, [eventsQuery.data, layersQuery.data, layerToggles, calendars, calendarId])
 
-  function setView(next: 'timeline' | 'month') {
+  /* 视图是否带时间轴（凌晨策略仅对这类视图有意义） */
+  const isTimeGrid = view === 'timeline' || view === 'week'
+
+  /*
+   * 策略 B（裁剪空档）：按当前范围日程的首末时刻裁剪坐标轴（± 1 小时，出界收紧）。
+   * 仅 timeGrid 视图生效；范围内无日程（或全是全天日程）时保持完整 00:00–24:00。
+   */
+  const cropWindow = useMemo(() => {
+    if (dawn !== 'crop' || !isTimeGrid) return null
+    let min = Infinity
+    let max = -Infinity
+    for (const e of fcEvents) {
+      if (e.allDay || !e.start) continue
+      const s = Date.parse(e.start)
+      const en = e.end ? Date.parse(e.end) : s + 3600_000
+      if (!Number.isFinite(s) || !Number.isFinite(en) || en <= s) continue
+      min = Math.min(min, s)
+      max = Math.max(max, en)
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return null
+    const startMin = Math.max(0, Math.floor(wallMinutes(min) / 60) * 60 - 60)
+    const endMin = Math.min(1440, Math.ceil(wallMinutes(max) / 60) * 60 + 60)
+    if (endMin - startMin < 120) return { min: Math.max(0, startMin - 60), max: Math.min(1440, endMin + 60) }
+    return { min: startMin, max: endMin }
+  }, [dawn, isTimeGrid, fcEvents])
+
+  /* 智能滚动的目标分钟（+08:00 墙钟）：今天 → 当前时刻前 30 分钟；非今天 → 首个日程前 30 分钟；无日程 → 08:00 */
+  const smartMinutes = useMemo(() => {
+    const nowMs = Date.now()
+    const inRange =
+      Date.parse(range.start) <= nowMs && nowMs <= Date.parse(range.end) + 86_399_000
+    if (inRange) return wallMinutes(nowMs) - 30
+    let first = Infinity
+    for (const e of fcEvents) {
+      if (e.allDay || !e.start) continue
+      const s = Date.parse(e.start)
+      if (Number.isFinite(s) && s >= Date.parse(range.start)) first = Math.min(first, s)
+    }
+    return Number.isFinite(first) ? wallMinutes(first) - 30 : 8 * 60
+  }, [range.start, range.end, fcEvents])
+
+  /*
+   * 滚动执行：日历 height="auto"，时间网格由外层 .skin-gcal 容器整体滚动——
+   * FullCalendar 自身的 scrollToTime/scrollTime 在这种配置下无效（内部无滚动条），
+   * 必须直接滚动外层容器。
+   * px/分钟 = timegrid-body 总高 ÷ 1440（body 纵向恰好覆盖 24 小时；
+   * 不要用 .fc-timegrid-slot 计数——那会把标签格与通道格都算进去，差一倍）。
+   */
+  function scrollToWall(minutes: number) {
+    const scroller = document.querySelector<HTMLElement>('.skin-gcal.overflow-y-auto')
+    const body = document.querySelector<HTMLElement>('.fc-timegrid-body')
+    if (!scroller || !body) return
+    const scrollerRect = scroller.getBoundingClientRect()
+    const bodyRect = body.getBoundingClientRect()
+    const pxPerMin = bodyRect.height / 1440
+    const bodyTop = bodyRect.top - scrollerRect.top + scroller.scrollTop
+    scroller.scrollTo({ top: Math.max(0, bodyTop + minutes * pxPerMin - 14), behavior: 'smooth' })
+  }
+
+  /*
+   * 策略 A 的滚动：仅在「视图/日期/策略」变化时执行一次，
+   * 数据轮询（deferredInterval）不会重复触发，避免打断用户手动滚动。
+   */
+  const scrollSig = `${view}|${range.start}|${dawn}`
+  const lastScrollSig = useRef<string | null>(null)
+  useEffect(() => {
+    if (dawn !== 'smart' || !isTimeGrid) {
+      lastScrollSig.current = scrollSig
+      return
+    }
+    if (lastScrollSig.current === scrollSig) return
+    lastScrollSig.current = scrollSig
+    const timer = window.setTimeout(() => scrollToWall(smartMinutes), 80)
+    return () => window.clearTimeout(timer)
+  }, [scrollSig, dawn, isTimeGrid, smartMinutes])
+
+  /* 「定位」按钮：手动重新执行一次智能滚动 */
+  function refocusSmart() {
+    scrollToWall(smartMinutes)
+  }
+
+  /*
+   * 策略 C（刻度标记）数据：24 小时占用足迹——
+   * 每小时累计日程分钟数，颜色取该小时内占比最高的分类色（有日程即点亮）。
+   * 时段切分逻辑与时间线一致（+08:00 墙钟、跨小时段拆分）。
+   */
+  const strip = useMemo(() => {
+    const CST = 8 * 3600_000
+    const DAY = 86_400_000
+    const cells = Array.from({ length: 24 }, () => ({ minutes: 0, color: null as string | null }))
+    const perHourColor = new Map<number, Map<string, number>>() // hour → (color → minutes)
+    for (const e of fcEvents) {
+      if (e.allDay || !e.start) continue
+      const s = Date.parse(e.start)
+      const en = e.end ? Date.parse(e.end) : s + 3600_000
+      if (!Number.isFinite(s) || !Number.isFinite(en) || en <= s) continue
+      const color = e.backgroundColor
+      let cursor = Math.max(s, Date.parse(range.start))
+      const cap = Math.min(en, Date.parse(range.end) + DAY)
+      let guard = 0
+      while (cursor < cap && guard < 200) {
+        guard += 1
+        const wallMs = ((cursor + CST) % DAY + DAY) % DAY
+        const hour = Math.floor(wallMs / 3600_000)
+        const hourEndMs = cursor + (3600_000 - (wallMs % 3600_000))
+        const seg = Math.min(cap, hourEndMs) - cursor
+        if (seg > 0) {
+          cells[hour].minutes += seg / 60_000
+          const byColor = perHourColor.get(hour) ?? new Map<string, number>()
+          byColor.set(color, (byColor.get(color) ?? 0) + seg / 60_000)
+          perHourColor.set(hour, byColor)
+        }
+        cursor = Math.min(cap, hourEndMs)
+      }
+    }
+    // 每小时取占比最高的分类色
+    for (const [hour, byColor] of perHourColor) {
+      const top = [...byColor.entries()].sort((a, b) => b[1] - a[1])[0]
+      if (top) cells[hour].color = top[0]
+    }
+    return cells
+  }, [fcEvents, range.start, range.end])
+
+  /** 点击标记 → 跳到该小时 */
+  function jumpToHour(hour: number) {
+    scrollToWall(hour * 60)
+  }
+
+  function setView(next: CalView) {
     setParams((p) => {
       const np = new URLSearchParams(p)
       np.set('view', next)
       return np
     })
     // initialView 仅初始化生效，切换必须走 api.changeView
-    calendarRef.current?.getApi().changeView(next === 'month' ? 'dayGridMonth' : 'timeGridDay')
+    calendarRef.current?.getApi().changeView(CAL_VIEW_TYPES[next])
   }
 
   function onDatesSet(arg: DatesSetArg) {
@@ -282,6 +476,26 @@ export function CalendarPage() {
           </Button>
         </div>
         <CalendarSegmented view={view} onChange={setView} />
+        {isTimeGrid && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-text-4">凌晨</span>
+            <Segmented
+              size="sm"
+              value={dawn}
+              onValueChange={(v) => setDawnPersist(v)}
+              options={([
+                { v: 'smart', label: DAWN_LABEL.smart },
+                { v: 'crop', label: DAWN_LABEL.crop },
+                { v: 'strip', label: DAWN_LABEL.strip },
+              ] as { v: DawnStrategy; label: string }[]).map((o) => ({ value: o.v, label: o.label }))}
+            />
+            {dawn === 'smart' && (
+              <Button variant="ghost" size="sm" onClick={refocusSmart} title={smartMinutes === 8 * 60 ? '滚动到 08:00' : '滚动到当前时刻 / 首个日程'}>
+                定位
+              </Button>
+            )}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-1.5 lg:ml-2">
           <Chip active={layerToggles.events} onClick={() => toggleLayer('events')}>日程</Chip>
           <Chip active={layerToggles['task-segments']} onClick={() => toggleLayer('task-segments')}>任务段</Chip>
@@ -298,16 +512,43 @@ export function CalendarPage() {
         </div>
       )}
 
+      {/* 策略 C：小时分布条（有日程的小时点亮，点击跳到该小时） */}
+      {isTimeGrid && dawn === 'strip' && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-ctl border border-border bg-surface px-3 py-2">
+          <span className="text-[11px] text-text-4">小时分布（点击跳转）</span>
+          <div className="flex min-w-0 flex-1 items-end gap-[3px]">
+            {strip.map((c, hour) => {
+              const minutes = Math.round(c.minutes)
+              const has = minutes > 0
+              const h = Math.min(18, 4 + Math.min(1, minutes / 60) * 14)
+              return (
+                <button
+                  key={hour}
+                  type="button"
+                  title={has ? `${String(hour).padStart(2, '0')}:00 · ${minutes} 分钟` : `${String(hour).padStart(2, '0')}:00 · 无日程`}
+                  onClick={() => jumpToHour(hour)}
+                  className={cn(
+                    'flex-1 rounded-t-[3px] outline-none transition-[filter] hover:brightness-110',
+                    has ? '' : 'bg-surface-2',
+                  )}
+                  style={{ height: has ? h : 4, backgroundColor: has ? c.color ?? '#3B82F6' : undefined }}
+                />
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 日历主体 + 收件箱侧板（皮肤：谷歌竖条日视图 / 圆点行月视图） */}
       <div className="flex min-h-0 flex-1 gap-4">
         {/* 日历网格自身滚动：收件箱侧板因此常驻可见（主滚动容器在外壳 main 上） */}
         <div className="skin-gcal min-w-0 flex-1 overflow-y-auto select-none [&_.fc-event-mirror]:pointer-events-none">
           <FullCalendar
             ref={calendarRef}
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+            plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
             locale={zhCnLocale}
             headerToolbar={false}
-            initialView={view === 'month' ? 'dayGridMonth' : 'timeGridDay'}
+            initialView={CAL_VIEW_TYPES[view]}
             datesSet={onDatesSet}
             events={fcEvents}
             selectable={view === 'timeline'}
@@ -322,8 +563,8 @@ export function CalendarPage() {
             stickyHeaderDates
             allDaySlot
             nowIndicator
-            slotMinTime="00:00:00"
-            slotMaxTime="24:00:00"
+            slotMinTime={cropWindow ? scrollTimeOf(cropWindow.min) : '00:00:00'}
+            slotMaxTime={cropWindow ? scrollTimeOf(cropWindow.max) : '24:00:00'}
             firstDay={1}
             eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
             eventContent={(arg) => {
@@ -467,25 +708,20 @@ function nextHourPlus(): Date {
   return d
 }
 
-function CalendarSegmented({ view, onChange }: { view: 'timeline' | 'month'; onChange: (v: 'timeline' | 'month') => void }) {
+function CalendarSegmented({ view, onChange }: { view: CalView; onChange: (v: CalView) => void }) {
   return (
     <div className="inline-flex items-center rounded-full bg-surface-2 p-[3px]">
-      {(
-        [
-          { v: 'timeline', label: '时间轴' },
-          { v: 'month', label: '月' },
-        ] as const
-      ).map((o) => (
+      {(['timeline', 'week', 'month', 'list'] as const).map((v) => (
         <button
-          key={o.v}
+          key={v}
           type="button"
-          onClick={() => onChange(o.v)}
+          onClick={() => onChange(v)}
           className={cn(
             'h-7 rounded-full px-3 text-[13px] font-medium text-text-3 transition-colors',
-            view === o.v && 'bg-bg text-primary shadow-card',
+            view === v && 'bg-bg text-primary shadow-card',
           )}
         >
-          {o.label}
+          {CAL_VIEW_LABEL[v]}
         </button>
       ))}
     </div>
