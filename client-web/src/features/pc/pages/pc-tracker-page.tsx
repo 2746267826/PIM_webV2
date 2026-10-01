@@ -72,11 +72,12 @@ export function PcTrackerPage() {
 
   /*
    * 时间块热力的逐小时数据（合并逻辑见 hourly-heat.ts）：
-   * 条形取 summary.heatmap（覆盖完整），待分类/主要应用取 activity-analysis（仅它提供），
-   * 按 +08:00 本地小时对齐。时刻换算不使用浏览器本地时区。
+   * 条形取 summary.heatmap（覆盖完整，输入口径），待分类/主要应用取 activity-analysis（仅它提供），
+   * 时间线覆盖段拆自 summary.timeline（窗口事件口径），按 +08:00 本地小时对齐。
+   * 时刻换算不使用浏览器本地时区。
    */
   const hourlyRows = useMemo(
-    () => buildHourlyHeatRows(summary.data?.heatmap, activity.data?.blocks),
+    () => buildHourlyHeatRows(summary.data?.heatmap, activity.data?.blocks, summary.data?.timeline),
     [summary.data, activity.data],
   )
 
@@ -336,37 +337,41 @@ export function PcTrackerPage() {
               {hourlyRows.length === 0 ? (
                 <p className="py-4 text-center text-[13px] text-text-4">暂无数据</p>
               ) : (
-                (showAllHours ? hourlyRows : hourlyRows.filter((r) => r.activeMinutes > 0)).map((row) => (
-                  <div
-                    key={row.hour}
-                    className="flex items-center gap-2"
-                    title={[
-                      `${row.label} 活跃 ${row.activeMinutes} 分钟`,
-                      row.totalEvents > 0 ? `事件 ${row.totalEvents}` : null,
-                      row.intensity > 0 ? `强度 ${row.intensity}/5` : null,
-                      row.pending > 0 ? `待分类 ${row.pending} 条` : null,
-                      row.topApp ? `主要：${row.topApp}` : null,
-                    ].filter(Boolean).join(' · ')}
-                  >
-                    <span className="tnum w-10 shrink-0 text-[11px] text-text-4">{row.label}</span>
-                    <div className="h-4 flex-1 overflow-hidden rounded-full bg-surface-2">
-                      <div
-                        className="h-full rounded-full transition-[width] duration-200"
-                        style={{
-                          width: `${Math.min(100, (row.activeMinutes / 60) * 100)}%`,
-                          backgroundColor: INTENSITY_RAMP[Math.min(5, Math.max(1, row.intensity))],
-                        }}
-                      />
+                (showAllHours ? hourlyRows : hourlyRows.filter((r) => r.activeMinutes > 0)).map((row) => {
+                  const color = INTENSITY_RAMP[Math.min(5, Math.max(1, row.intensity))]
+                  const activePct = Math.min(100, (row.activeMinutes / 60) * 100)
+                  const coveredPct = Math.min(activePct, (row.coveredMinutes / 60) * 100)
+                  return (
+                    <div
+                      key={row.hour}
+                      className="flex items-center gap-2"
+                      title={[
+                        `${row.label} 活跃 ${row.activeMinutes} 分钟`,
+                        row.coveredMinutes > 0 ? `时间线覆盖 ${Math.round(row.coveredMinutes)} 分钟` : null,
+                        row.activeMinutes - row.coveredMinutes > 0 ? `仅键鼠输入 ${Math.max(0, Math.round(row.activeMinutes - row.coveredMinutes))} 分钟（窗口事件未采集）` : null,
+                        row.totalEvents > 0 ? `事件 ${row.totalEvents}` : null,
+                        row.intensity > 0 ? `强度 ${row.intensity}/5` : null,
+                        row.pending > 0 ? `待分类 ${row.pending} 条` : null,
+                        row.topApp ? `主要：${row.topApp}` : null,
+                      ].filter(Boolean).join(' · ')}
+                    >
+                      <span className="tnum w-10 shrink-0 text-[11px] text-text-4">{row.label}</span>
+                      <div className="h-4 flex-1 overflow-hidden rounded-full bg-surface-2">
+                        <div className="flex h-full" style={{ width: `${activePct}%` }}>
+                          <div className="h-full rounded-l-full" style={{ width: `${coveredPct}%`, backgroundColor: color }} />
+                          <div className="h-full rounded-r-full" style={{ width: `${activePct - coveredPct}%`, backgroundColor: color, opacity: 0.32 }} />
+                        </div>
+                      </div>
+                      {row.pending > 0 && (
+                        <StatusBadge tone="warn" dot={false} className="shrink-0">{row.pending} 待分类</StatusBadge>
+                      )}
                     </div>
-                    {row.pending > 0 && (
-                      <StatusBadge tone="warn" dot={false} className="shrink-0">{row.pending} 待分类</StatusBadge>
-                    )}
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
             <p className="mt-2 text-[11px] text-text-4">
-              条宽 = 该小时活跃分钟占 60 分钟的比例；颜色 = 服务端强度档（1–5）。
+              条宽 = 该小时输入口径活跃分钟占 60 分钟的比例：深色 = 时间线有窗口记录覆盖，浅色 = 仅有键鼠输入（窗口事件未采集）；颜色 = 服务端强度档（1–5）。
             </p>
           </Card>
         </div>

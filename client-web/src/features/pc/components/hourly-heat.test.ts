@@ -93,4 +93,33 @@ describe('buildHourlyHeatRows（时间块热力数据合并）', () => {
     expect(JSON.stringify(rows)).not.toContain('NaN')
     expect(JSON.stringify(rows)).not.toContain('undefined')
   })
+
+  it('时间线覆盖拆到对应小时（同小时内的记录）', () => {
+    // 本地 13:12 起 12 分钟 → 全部落 13 点档
+    const rows = buildHourlyHeatRows(
+      [heat(13, { activeMinutes: 60 })],
+      [],
+      [{ start: '2026-09-27T05:12:00.0000000+00:00', durationMinutes: 12 }],
+    )
+    expect(rows[0].coveredMinutes).toBe(12)
+    expect(rows[0].activeMinutes).toBe(60)
+  })
+
+  it('跨小时记录按墙钟拆分（23:50 → 次日 00:10 分属两档）', () => {
+    const rows = buildHourlyHeatRows(
+      [heat(23, { activeMinutes: 60 }), heat(0, { activeMinutes: 30 })],
+      [],
+      [{ start: '2026-09-26T15:50:00.0000000+00:00', durationMinutes: 20 }],
+    )
+    const h23 = rows.find((r) => r.hour === 23)!
+    const h0 = rows.find((r) => r.hour === 0)!
+    expect(h23.coveredMinutes).toBeCloseTo(10, 1)
+    expect(h0.coveredMinutes).toBeCloseTo(10, 1)
+  })
+
+  it('无时间线时覆盖为 0；坏记录安全跳过', () => {
+    const rows = buildHourlyHeatRows([heat(11, { activeMinutes: 40 })], [], [])
+    expect(rows[0].coveredMinutes).toBe(0)
+    expect(buildHourlyHeatRows([heat(11)], [], [{ start: 'bad', durationMinutes: 5 }, { durationMinutes: 5 }, { start: '2026-09-27T03:00:00Z', durationMinutes: -1 }])[0].coveredMinutes).toBe(0)
+  })
 })

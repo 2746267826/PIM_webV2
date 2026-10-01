@@ -7,6 +7,8 @@
  * - activity-analysis 的块数据覆盖明显稀疏（同一业务日常只有少数几小时非零，
  *   且块内时长合计可超过块本身），但「待分类计数」与「块内应用分布」仅它提供。
  * 故条形取 heatmap，待分类/主要应用取 activity-analysis，按 +08:00 本地小时对齐。
+ * timeline（窗口事件口径）另拆出每小时覆盖分钟：热力条深色段 = 时间线覆盖，
+ * 浅色段 = 仅有键鼠输入（窗口事件采集缺口，全屏应用等场景）。
  *
  * 时刻一律按 +08:00 墙钟换算（UTC 毫秒 + 固定偏移），不使用浏览器本地时区。
  */
@@ -25,13 +27,21 @@ export interface ActivityBlockInput {
   apps?: { appName?: string | null; durationSeconds?: number | null }[] | null
 }
 
+/** summary.timeline 记录（只取画覆盖段需要的字段） */
+export interface TimelineCoverageInput {
+  start?: string | null
+  durationMinutes?: number | null
+}
+
 export interface HourlyHeatRow {
   /** 本地小时（0–23） */
   hour: number
   /** HH:00 标签 */
   label: string
-  /** 该小时活跃分钟（条宽用，60 = 整小时） */
+  /** 该小时活跃分钟（输入口径，条宽用，60 = 整小时） */
   activeMinutes: number
+  /** 其中时间线（窗口事件记录）覆盖的分钟，≤ activeMinutes 常态，坏数据时可能略大 */
+  coveredMinutes: number
   /** 服务端强度档（0–5） */
   intensity: number
   /** 事件数 */
@@ -67,14 +77,44 @@ function parseUtc(value: string | null | undefined): number | null {
 }
 
 /**
+ * 把一条时间线记录的覆盖分钟按 +08:00 墙钟小时拆分累加（记录可跨小时/跨日）。
+ * 按半开区间 [start, start+duration) 逐段推进；guard 防坏数据（超长时长）死循环。
+ */
+function addCoverage(coverage: Map<number, number>, startMs: number, durationMinutes: number): void {
+  let cursor = startMs
+  let remainingMs = durationMinutes * MS_PER_MINUTE
+  for (let guard = 0; remainingMs > 0 && guard < 48; guard++) {
+    const minutes = toMinutes(cursor)
+    const hour = Math.floor(minutes / 60) % 24
+    const remainInHourMs = (60 - (minutes % 60)) * MS_PER_MINUTE
+    const takeMs = Math.min(remainInHourMs, remainingMs)
+    coverage.set(hour, (coverage.get(hour) ?? 0) + takeMs / MS_PER_MINUTE)
+    cursor += takeMs
+    remainingMs -= takeMs
+  }
+}
+
+/**
  * 合并 summary.heatmap 与 activity-analysis.blocks → 逐小时行（按本地小时升序）。
- * 无法解析的时间戳跳过；同一小时以 heatmap 为准、activity 数据叠加。
+ * timeline（窗口事件记录）可选传入：拆分出每小时的「时间线覆盖分钟」，
+ * 与输入口径 activeMinutes 分开——窗口事件采集有缺口（全屏应用等），
+ * 两者差值 = 仅有键鼠输入、无窗口记录的时间。无法解析的时间戳跳过；
+ * 同一小时以 heatmap 为准、activity/timeline 数据叠加。
  */
 export function buildHourlyHeatRows(
   heatmap: readonly HeatmapBucketInput[] | null | undefined,
   blocks: readonly ActivityBlockInput[] | null | undefined,
+  timeline?: readonly TimelineCoverageInput[] | null,
 ): HourlyHeatRow[] {
   const rows = new Map<number, HourlyHeatRow>()
+  const coverage = new Map<number, number>()
+
+  for (const rec of Array.isArray(timeline) ? timeline : []) {
+    const ms = parseUtc(rec?.start)
+    const dur = Number(rec?.durationMinutes ?? 0)
+    if (ms == null || !Number.isFinite(dur) || dur <= 0) continue
+    addCoverage(coverage, ms, dur)
+  }
 
   for (const b of Array.isArray(heatmap) ? heatmap : []) {
     const ms = parseUtc(b?.start)
@@ -85,6 +125,7 @@ export function buildHourlyHeatRows(
       hour,
       label: `${String(hour).padStart(2, '0')}:00`,
       activeMinutes: Math.max(0, Math.round(b?.activeMinutes ?? 0)),
+      coveredMinutes: Math.round(coverage.get(hour) ?? 0),
       intensity: Math.max(0, Math.round(b?.intensityLevel ?? 0)),
       totalEvents: Math.max(0, Math.round(b?.totalEvents ?? 0)),
       pending: 0,
