@@ -92,4 +92,14 @@
   --color-layer-availability: #0ea5e9;
   --color-layer-ai: #f97316;
   --color-layer-calendar: #3b82f6;
+
+  /* ── 运动令牌（时长 + 缓动；动效统一从这里取，禁止散写） ──
+   * fast = 悬停/按压等即时反馈；base = 入场/滑块/数字滚动；slow = 浮层进出场。
+   * 标准曲线与现有浮层动效一致；spring 用于 layout 滑块/FLIP 重排。
+   */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 240ms;
+  --ease-standard: cubic-bezier(0.32, 0.72, 0.24, 1);
+  --ease-spring: cubic-bezier(0.34, 1.3, 0.5, 1);
 }

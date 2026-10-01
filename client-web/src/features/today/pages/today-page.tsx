@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { ChevronDown, ChevronRight, Hammer } from 'lucide-react'
 import { useBusinessDate, useTodayRegistry, useTodaySection } from '../queries'
+import { TodayPulse } from '../components/today-pulse'
 import type { TodaySectionRef, TodaySectionStatus } from '../api'
 import { formatDuration, formatRange, formatTime } from '@/lib/datetime'
 import { Card, CardTitle, EmptyState, InlineAlert, PageHeader, Skeleton, StatusBadge, type Tone } from '@/components/ui'
+import { Stagger, StaggerItem } from '@/components/motion/primitives'
 import { cn } from '@/lib/utils'
 
 const STATUS_TONE: Record<TodaySectionStatus, Tone> = {
@@ -212,7 +214,7 @@ function SectionShell({
 }) {
   const meta = SECTION_HINT[section.id] ?? SECTION_HINT[section.kind]
   return (
-    <Card className="flex flex-col p-4">
+    <Card className="flex h-full flex-col p-4">
       <div className="flex items-center gap-2">
         <CardTitle className="truncate">{sectionTitle(section.id, section.kind)}</CardTitle>
         <StatusBadge tone={STATUS_TONE[section.status]} className="ml-auto shrink-0">
@@ -352,15 +354,20 @@ export function TodayPage() {
         </div>
       ) : (
         <div className="space-y-6">
+          {/* 今日脉搏：业务日 24h 三轨时间条（日程/任务段/习惯） */}
+          <TodayPulse date={date} />
+
           {/* 行动格 */}
           {groups.action.length > 0 && (
             <section>
               <h2 className="mb-2 text-xs font-medium text-text-3">行动</h2>
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                {groups.action.map((s) => (
-                  <TodaySectionHost key={s.id} section={s} date={date} />
+              <Stagger className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {groups.action.map((s, i) => (
+                  <StaggerItem key={s.id} index={i} className="h-full">
+                    <TodaySectionHost section={s} date={date} />
+                  </StaggerItem>
                 ))}
-              </div>
+              </Stagger>
             </section>
           )}
 
@@ -368,11 +375,13 @@ export function TodayPage() {
           {groups.data.length > 0 && (
             <section>
               <h2 className="mb-2 text-xs font-medium text-text-3">数据</h2>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {groups.data.map((s) => (
-                  <TodaySectionHost key={s.id} section={s} date={date} />
+              <Stagger className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {groups.data.map((s, i) => (
+                  <StaggerItem key={s.id} index={i} className="h-full">
+                    <TodaySectionHost section={s} date={date} />
+                  </StaggerItem>
                 ))}
-              </div>
+              </Stagger>
             </section>
           )}
 

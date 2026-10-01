@@ -42,8 +42,25 @@ echarts.use([
 
 /** ECharts 通用主题：轴线/文字/网格线按设计系统着色（DESIGN.md §图表规范） */
 export function themedOption(option: EChartsCoreOption): EChartsCoreOption {
+  /*
+   * 动画默认值：首绘错峰生长（柱/饼/仪表通用），更新 300ms 平滑过渡。
+   * 放在展开前 = 调用方传了 animation 相关字段时以调用方为准。
+   * reduced motion（系统设置）整体关掉——与全局动效红线一致。
+   */
+  const reducedMotion =
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   return {
     textStyle: { fontFamily: 'Inter Variable, Noto Sans SC Variable, sans-serif', color: '#64748B' },
+    ...(reducedMotion
+      ? { animation: false }
+      : {
+          animation: true,
+          animationDuration: 500,
+          animationDurationUpdate: 300,
+          animationEasing: 'cubicOut',
+          animationEasingUpdate: 'cubicOut',
+          animationDelay: (idx: number) => Math.min(idx, 20) * 25,
+        }),
     ...option,
   }
 }

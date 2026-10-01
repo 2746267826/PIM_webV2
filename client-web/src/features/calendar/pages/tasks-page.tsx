@@ -1,12 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
+import { useQueries } from '@tanstack/react-query'
+import { AnimatePresence, motion } from 'motion/react'
 import { Plus, Search, Timer } from 'lucide-react'
 import { useBatchDeleteTasks, useTaskBooks, useTasksPaged, useToggleTaskComplete } from '../queries'
+import { tasksApi } from '../api'
 import { TaskEditorDialog } from '../components/task-editor-dialog'
 import { TaskSegmentsDialog } from '../components/task-segments-dialog'
 import { TaskDetailDialog } from '../components/entity-detail-dialogs'
 import type { TaskResponse } from '../types'
 import { dayEndIso, dayStartIso, formatDurationC, formatTime } from '@/lib/datetime'
+import { celebrateOnce } from '@/lib/celebrate'
+import { CountUp } from '@/components/motion/primitives'
 import { Button, Card, Checkbox, Chip, EmptyState, Input, PageHeader, Select, Skeleton, StatusBadge } from '@/components/ui'
 import { cn } from '@/lib/utils'
 
@@ -87,6 +92,29 @@ export function TasksPage() {
   const tasks = data?.items ?? []
   const totalPages = data?.totalPages ?? 1
 
+  /*
+   * 庆祝时刻：完成一个任务后，若「今日到期」集合从有未完成变为 0，
+   * 放一次会话级 confetti（celebrateOnce 内部去重 + reduced-motion 短路）。
+   * 今日集合走独立分页查询（key 在 ['calendar','tasks','paged'] 前缀下，
+   * 会被 useToggleTaskComplete 的失效联动自动刷新）。
+   */
+  const now = new Date()
+  const duePulse = useTasksPaged({ dueFrom: dayStartIso(now), dueTo: dayEndIso(now), page: 1, pageSize: 100 })
+  const pendingDue = duePulse.data
+    ? duePulse.data.items.filter((t) => t.status !== 'COMPLETED').length
+    : null
+  const justCompletedRef = useRef(false)
+  const prevPendingRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (pendingDue == null) return
+    const prev = prevPendingRef.current
+    prevPendingRef.current = pendingDue
+    if (justCompletedRef.current && prev !== null && prev > 0 && pendingDue === 0) {
+      justCompletedRef.current = false
+      celebrateOnce(`tasks-all-done-${dayStartIso(now)}`)
+    }
+  }, [pendingDue])
+
   function setTaskBook(id: string | undefined) {
     setParams((p) => {
       const np = new URLSearchParams(p)
@@ -166,7 +194,7 @@ export function TasksPage() {
       </div>
 
       <div className="flex min-h-0 flex-1 gap-4">
-        {/* 任务本树（任务本列表，选中进 URL） */}
+        {/* 任务本树（任务本列表，选中进 URL）+ 优先级分布 */}
         <aside className="hidden w-52 shrink-0 md:block">
           <Card className="p-2">
             <button
@@ -194,6 +222,7 @@ export function TasksPage() {
               </button>
             ))}
           </Card>
+          <PriorityBars />
         </aside>
 
         {/* 任务列表 */}
@@ -224,70 +253,85 @@ export function TasksPage() {
               />
             </Card>
           ) : (
-            <Card className="divide-y divide-divider">
-              {tasks.map((task) => {
-                const done = task.status === 'COMPLETED'
-                const badge = PRIORITY_BADGE[task.priority]
-                const book = taskBooks.find((b) => b.id === task.taskBookId)
-                return (
-                  <div
-                    key={task.id}
-                    className={cn(
-                      'group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface',
-                      selected.has(task.id) && 'bg-primary-soft/50',
-                    )}
-                  >
-                    <Checkbox
-                      checked={selected.has(task.id)}
-                      onCheckedChange={(v) => toggleSelect(task.id, v)}
-                      ariaLabel={`选择 ${task.title}`}
-                    />
-                    <span
-                      className={cn('h-5 w-[3px] shrink-0 rounded-full', task.priority >= 9 ? 'bg-crit' : task.priority >= 5 ? 'bg-warn' : 'bg-border-strong')}
-                      aria-hidden
-                    />
-                    <button
-                      type="button"
-                      aria-label={done ? '标记未完成' : '标记完成'}
-                      onClick={() => toggleComplete.mutate({ task, completed: !done })}
+            <Card className="divide-y divide-divider overflow-hidden">
+              <AnimatePresence initial={false}>
+                {tasks.map((task) => {
+                  const done = task.status === 'COMPLETED'
+                  const badge = PRIORITY_BADGE[task.priority]
+                  const book = taskBooks.find((b) => b.id === task.taskBookId)
+                  return (
+                    <motion.div
+                      layout
+                      key={task.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0, height: 0, transition: { duration: 0.18 } }}
                       className={cn(
-                        'grid size-4.5 shrink-0 place-items-center rounded-full border transition-colors outline-none',
-                        done ? 'border-ok bg-ok text-white' : 'border-border-strong hover:border-primary',
+                        'group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface',
+                        selected.has(task.id) && 'bg-primary-soft/50',
                       )}
                     >
-                      {done && <span className="size-1.5 rounded-full bg-white" aria-hidden />}
-                    </button>
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 text-left outline-none"
-                      onClick={() => setDetailTask(task)}
-                    >
-                      <span className={cn('block truncate text-sm', done ? 'text-text-4 line-through' : 'text-text-1')}>
-                        {task.title}
-                      </span>
-                      <span className="mt-0.5 flex items-center gap-2 text-[11px] text-text-4">
-                        {book && <span>{book.name}</span>}
-                        {task.due && <span className="tnum text-warn">截止 {formatTime(task.due)}</span>}
-                        {task.dtStart && <span className="tnum">已排 {formatTime(task.dtStart)}</span>}
-                        {task.estimatedDuration && <span>预计 {formatDurationC(task.estimatedDuration)}</span>}
-                      </span>
-                    </button>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      {badge && <StatusBadge tone={badge.tone} dot={false}>{badge.label}</StatusBadge>}
-                      {done && <StatusBadge tone="ok" dot={false}>已完成</StatusBadge>}
+                      <Checkbox
+                        checked={selected.has(task.id)}
+                        onCheckedChange={(v) => toggleSelect(task.id, v)}
+                        ariaLabel={`选择 ${task.title}`}
+                      />
+                      <span
+                        className={cn('h-5 w-[3px] shrink-0 rounded-full', task.priority >= 9 ? 'bg-crit' : task.priority >= 5 ? 'bg-warn' : 'bg-border-strong')}
+                        aria-hidden
+                      />
+                      <CompleteCircle
+                        done={done}
+                        onToggle={() =>
+                          toggleComplete.mutate({ task, completed: !done }, {
+                            onSuccess: () => {
+                              justCompletedRef.current = true
+                            },
+                          })
+                        }
+                      />
                       <button
                         type="button"
-                        aria-label={`执行时间段：${task.title}`}
-                        title="执行时间段"
-                        onClick={() => setSegmentsTask(task)}
-                        className="rounded-ctl p-1.5 text-text-4 transition-colors outline-none hover:bg-surface-2 hover:text-text-1"
+                        className="min-w-0 flex-1 text-left outline-none"
+                        onClick={() => setDetailTask(task)}
                       >
-                        <Timer className="size-4" aria-hidden />
+                        <span className="relative block truncate text-sm">
+                          <span className={cn('block truncate', done ? 'text-text-4' : 'text-text-1')}>
+                            {task.title}
+                          </span>
+                          {/* 划线扫过：完成时从左向右画出，替代静态 line-through */}
+                          <motion.span
+                            aria-hidden
+                            className="absolute top-1/2 left-0 h-px w-full origin-left bg-text-4"
+                            initial={false}
+                            animate={{ scaleX: done ? 1 : 0 }}
+                            transition={{ duration: 0.2, ease: [0.32, 0.72, 0.24, 1] }}
+                          />
+                        </span>
+                        <span className="mt-0.5 flex items-center gap-2 text-[11px] text-text-4">
+                          {book && <span>{book.name}</span>}
+                          {task.due && <span className="tnum text-warn">截止 {formatTime(task.due)}</span>}
+                          {task.dtStart && <span className="tnum">已排 {formatTime(task.dtStart)}</span>}
+                          {task.estimatedDuration && <span>预计 {formatDurationC(task.estimatedDuration)}</span>}
+                        </span>
                       </button>
-                    </div>
-                  </div>
-                )
-              })}
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {badge && <StatusBadge tone={badge.tone} dot={false}>{badge.label}</StatusBadge>}
+                        {done && <StatusBadge tone="ok" dot={false}>已完成</StatusBadge>}
+                        <button
+                          type="button"
+                          aria-label={`执行时间段：${task.title}`}
+                          title="执行时间段"
+                          onClick={() => setSegmentsTask(task)}
+                          className="rounded-ctl p-1.5 text-text-4 transition-colors outline-none hover:bg-surface-2 hover:text-text-1"
+                        >
+                          <Timer className="size-4" aria-hidden />
+                        </button>
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </AnimatePresence>
             </Card>
           )}
 
@@ -360,5 +404,81 @@ export function TasksPage() {
         }}
       />
     </div>
+  )
+}
+
+/** 完成圆钮：打勾描边动画（pathLength 0→1），高频正反馈的核心时刻 */
+function CompleteCircle({ done, onToggle }: { done: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={done ? '标记未完成' : '标记完成'}
+      onClick={onToggle}
+      className={cn(
+        'grid size-4.5 shrink-0 place-items-center rounded-full border transition-colors duration-150 outline-none',
+        done ? 'border-ok bg-ok text-white' : 'border-border-strong hover:border-primary',
+      )}
+    >
+      {done && (
+        <svg viewBox="0 0 16 16" className="size-3 overflow-visible" aria-hidden>
+          <motion.path
+            d="M3.5 8.5 6.5 11.5 12.5 4.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+          />
+        </svg>
+      )}
+    </button>
+  )
+}
+
+const PRIORITY_TIERS: { priority: number; label: string; color: string }[] = [
+  { priority: 9, label: '高', color: 'bg-crit' },
+  { priority: 5, label: '中', color: 'bg-warn' },
+  { priority: 1, label: '低', color: 'bg-border-strong' },
+]
+
+/**
+ * 优先级分布（任务本树下方）：三条计数查询只要 totalCount（pageSize=1），
+ * 条宽按三者最大值归一。给「先做哪类」一个一眼可见的粗略依据。
+ */
+function PriorityBars() {
+  const queries = useQueries({
+    queries: PRIORITY_TIERS.map((t) => ({
+      queryKey: ['calendar', 'tasks', 'prio-count', t.priority],
+      queryFn: () => tasksApi.listPaged({ priority: t.priority, page: 1, pageSize: 1 }),
+      staleTime: 60_000,
+    })),
+  })
+  const counts = PRIORITY_TIERS.map((_, i) => queries[i]?.data?.totalCount ?? 0)
+  const max = Math.max(1, ...counts)
+  return (
+    <Card className="mt-3 p-3">
+      <p className="text-[11px] font-medium text-text-3">优先级分布</p>
+      <div className="mt-2 space-y-1.5">
+        {PRIORITY_TIERS.map((t, i) => (
+          <div key={t.priority} className="flex items-center gap-2">
+            <span className="w-4 text-[11px] text-text-4">{t.label}</span>
+            <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-2">
+              {queries[i]?.isLoading ? (
+                <div className="skeleton-breathe h-full w-1/3 rounded-full bg-surface-2/0" />
+              ) : (
+                <div
+                  className={cn('h-full rounded-full transition-[width] duration-300', t.color)}
+                  style={{ width: `${(counts[i] / max) * 100}%` }}
+                />
+              )}
+            </div>
+            <CountUp value={counts[i]} className="w-8 text-right text-[11px] text-text-3" />
+          </div>
+        ))}
+      </div>
+    </Card>
   )
 }
