@@ -94,8 +94,8 @@ export function EventListView({
           sections.map((s) => (
             <section key={s.day}>
               <header className="flex items-baseline justify-between border-b border-border bg-surface px-4 py-2">
-                <span className="text-[13px] font-semibold text-text-1">{s.weekdayLabel}</span>
-                <span className="tnum text-xs text-text-3">{s.dateLabel}</span>
+                <span className="text-[13px] font-semibold text-text-1">{s.dateLabel}</span>
+                <span className="tnum text-xs text-text-3">{s.weekdayLabel}</span>
               </header>
               <div className="divide-y divide-border/70">
                 {s.items.map((item) => (
