@@ -11,6 +11,30 @@ type TestResult =
   | { ok: false; message: string }
 
 /**
+ * 连接失败 → 可操作的提示。
+ * fetch 抛 TypeError 且目标是跨域绝对地址时，最常见原因是服务器未返回
+ * CORS 允许头（实测本测试服务器未返回）：浏览器直连被拦，但同源部署与
+ * 原生壳（Capacitor/Tauri）不受限。
+ */
+function failureMessage(err: unknown, url: string): string {
+  if (err instanceof DOMException && err.name === 'AbortError') {
+    return '连接超时（8 秒）：请检查地址与网络'
+  }
+  const detail = err instanceof Error ? err.message : String(err)
+  const crossOrigin =
+    err instanceof TypeError &&
+    typeof window !== 'undefined' &&
+    /^https?:\/\//i.test(url) &&
+    !url.startsWith(window.location.origin)
+  if (crossOrigin) {
+    return `浏览器直连被拦截（${detail}）。最常见原因是服务器未返回 CORS 允许头：`
+      + '同源部署请留空地址（走当前部署源）；App/桌面壳不受此限制；'
+      + `浏览器跨域使用需服务端把本源（${window.location.origin}）加入 CORS 白名单。`
+  }
+  return `无法连接：${detail}`
+}
+
+/**
  * 服务器连接表单（/setup 与 /settings/server 共用）：
  * 测试连接走匿名端点 GET /api/version；保存后清令牌与查询缓存并重新登录。
  */
@@ -34,7 +58,15 @@ export function ServerForm({ mode }: { mode: 'setup' | 'settings' }) {
       const res = await fetch(candidateUrl(value, '/api/version'), {
         signal: controller.signal,
       })
-      if (!res.ok) throw new ApiError(`HTTP ${res.status}`, -1, res.status)
+      if (!res.ok) {
+        throw new ApiError(
+          res.status === 404
+            ? 'HTTP 404——该地址下没有 /api/version，请确认这是 PIM API 服务器'
+            : `HTTP ${res.status}`,
+          -1,
+          res.status,
+        )
+      }
       const info = (await res.json()) as { version?: string; capabilities?: string[] }
       setResult({
         ok: true,
@@ -42,13 +74,7 @@ export function ServerForm({ mode }: { mode: 'setup' | 'settings' }) {
         capabilities: info.capabilities ?? [],
       })
     } catch (err) {
-      setResult({
-        ok: false,
-        message:
-          err instanceof DOMException && err.name === 'AbortError'
-            ? '连接超时（8 秒）：请检查地址与网络'
-            : `无法连接：${err instanceof Error ? err.message : String(err)}`,
-      })
+      setResult({ ok: false, message: failureMessage(err, candidateUrl(value, '/api/version')) })
     } finally {
       clearTimeout(timer)
       setTesting(false)
@@ -87,8 +113,9 @@ export function ServerForm({ mode }: { mode: 'setup' | 'settings' }) {
           }}
         />
         <p className="mt-1.5 text-xs text-text-3">
-          留空 = 使用当前部署源（浏览器同源场景默认）。地址需包含协议，例如
-          <span className="mono mx-1">http://192.168.1.10:5858</span>。
+          留空 = 使用当前部署源（浏览器同源场景默认）。填服务器源地址（协议://主机:端口），
+          例如<span className="mono mx-1">http://192.168.1.10:5858</span>；误带
+          <span className="mono mx-1">/api/v1</span>后缀会自动去掉。
         </p>
       </div>
 

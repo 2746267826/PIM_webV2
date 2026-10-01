@@ -5,13 +5,39 @@ import {
   getApiBase,
   getApiBaseHistory,
   needsServerSetup,
+  normalizeApiBaseInput,
   setApiBase,
 } from './apiBase'
-import { STORAGE_KEYS, remove } from './storage'
+import { STORAGE_KEYS, remove, setJSON } from './storage'
 
 beforeEach(() => {
   remove(STORAGE_KEYS.apiBase)
   remove(STORAGE_KEYS.apiBaseHistory)
+})
+
+describe('normalizeApiBaseInput（base 恒为源地址）', () => {
+  it('剥离误带的 /api/v1 后缀（用户常粘贴完整 API URL）', () => {
+    expect(normalizeApiBaseInput('https://pim.example.com:15860/api/v1')).toBe('https://pim.example.com:15860')
+  })
+
+  it('大小写不敏感且连带尾斜杠一起处理', () => {
+    expect(normalizeApiBaseInput('https://x.example/API/V1/')).toBe('https://x.example')
+    expect(normalizeApiBaseInput('http://10.0.0.2:5858/api/')).toBe('http://10.0.0.2:5858')
+  })
+
+  it('纯源地址与空值不变', () => {
+    expect(normalizeApiBaseInput('http://192.168.1.10:5858')).toBe('http://192.168.1.10:5858')
+    expect(normalizeApiBaseInput('  ')).toBe('')
+  })
+
+  it('setApiBase 存储归一化后的值', () => {
+    setApiBase('https://pim.example.com:15860/api/v1')
+    expect(getApiBase()).toBe('https://pim.example.com:15860')
+  })
+
+  it('candidateUrl 同样归一化（测试连接用）', () => {
+    expect(candidateUrl('https://x.example/api/v1/', '/api/version')).toBe('https://x.example/api/version')
+  })
 })
 
 describe('setApiBase / getApiBase', () => {
@@ -59,6 +85,15 @@ describe('历史记录', () => {
     hist = getApiBaseHistory()
     expect(hist[0]).toBe('http://d')
     expect(hist).toHaveLength(5)
+  })
+
+  it('读取时归一化历史条目（修复带后缀的旧数据）', () => {
+    setJSON(STORAGE_KEYS.apiBaseHistory, [
+      'https://pim.example.com:15860/api/v1',
+      'https://pim.example.com:15860',
+      'bad value',
+    ])
+    expect(getApiBaseHistory()).toEqual(['https://pim.example.com:15860'])
   })
 })
 

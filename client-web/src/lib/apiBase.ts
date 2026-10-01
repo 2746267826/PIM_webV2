@@ -8,16 +8,42 @@ import { STORAGE_KEYS, getJSON, getString, setJSON, setString } from './storage'
 
 const HISTORY_LIMIT = 5
 
+/**
+ * 归一化用户输入的 API 地址：base 恒为「源地址」（协议://主机:端口，不含 /api/v1）。
+ * 用户常把完整 API URL（如 https://host:5858/api/v1）整个粘贴进来——
+ * 不去掉后缀会拼出 /api/v1/api/v1/... 全部 404，故存储与测试拼接前统一剥离。
+ */
+export function normalizeApiBaseInput(raw: string): string {
+  return raw
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/api\/v1$/i, '')
+    .replace(/\/api$/i, '')
+}
+
 export function getApiBase(): string {
-  return (getString(STORAGE_KEYS.apiBase) ?? '').trim().replace(/\/+$/, '')
+  return normalizeApiBaseInput(getString(STORAGE_KEYS.apiBase) ?? '')
 }
 
 export function getApiBaseHistory(): string[] {
-  return getJSON<string[]>(STORAGE_KEYS.apiBaseHistory, [])
+  // 读取时也归一化：修复归一化上线前存入的带 /api/v1 后缀的历史条目，并丢弃坏值
+  const raw = getJSON<string[]>(STORAGE_KEYS.apiBaseHistory, [])
+  const cleaned: string[] = []
+  for (const item of raw) {
+    const v = normalizeApiBaseInput(item ?? '')
+    if (!v) continue
+    try {
+      new URL(v)
+    } catch {
+      continue
+    }
+    if (!cleaned.includes(v)) cleaned.push(v)
+  }
+  return cleaned
 }
 
 export function setApiBase(raw: string): void {
-  const value = raw.trim().replace(/\/+$/, '')
+  const value = normalizeApiBaseInput(raw)
   if (value) {
     try {
       // 仅接受带协议的绝对地址（同源场景请留空）
@@ -44,9 +70,9 @@ export function apiUrl(path: string): string {
   return path.startsWith('/') ? base + path : `${base}/${path}`
 }
 
-/** 用候选地址（而非当前生效地址）拼 URL，供"测试连接"使用 */
+/** 用候选地址（而非当前生效地址）拼 URL，供"测试连接"使用；同样归一化误带的后缀 */
 export function candidateUrl(base: string, path: string): string {
-  const b = base.trim().replace(/\/+$/, '')
+  const b = normalizeApiBaseInput(base)
   if (!b) return path
   return path.startsWith('/') ? b + path : `${b}/${path}`
 }
