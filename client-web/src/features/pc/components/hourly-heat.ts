@@ -2,7 +2,7 @@
  * 「时间块热力」逐小时数据合并（纯函数，无 React 依赖）。
  *
  * 为什么两个来源合并：
- * - summary.heatmap 覆盖当天全部小时（activeMinutes / intensityScore 0–5 / totalEvents），
+ * - summary.heatmap 覆盖当天全部小时（activeMinutes / intensityLevel 0–5 / totalEvents），
  *   与 summary.timeline 的覆盖一致，是逐小时活跃度的可靠来源；
  * - activity-analysis 的块数据覆盖明显稀疏（同一业务日常只有少数几小时非零，
  *   且块内时长合计可超过块本身），但「待分类计数」与「块内应用分布」仅它提供。
@@ -14,7 +14,8 @@
 export interface HeatmapBucketInput {
   start?: string | null
   activeMinutes?: number | null
-  intensityScore?: number | null
+  /** 0–5 强度档（PC-3 修复后由 intensityScore 改名而来） */
+  intensityLevel?: number | null
   totalEvents?: number | null
 }
 
@@ -84,7 +85,7 @@ export function buildHourlyHeatRows(
       hour,
       label: `${String(hour).padStart(2, '0')}:00`,
       activeMinutes: Math.max(0, Math.round(b?.activeMinutes ?? 0)),
-      intensity: Math.max(0, Math.round(b?.intensityScore ?? 0)),
+      intensity: Math.max(0, Math.round(b?.intensityLevel ?? 0)),
       totalEvents: Math.max(0, Math.round(b?.totalEvents ?? 0)),
       pending: 0,
       topApp: null,

@@ -44,10 +44,11 @@ export function MouseHeatmap({ left, middle, right, sideBack, sideForward, scrol
         {/* 侧键（左侧两个小键） */}
         <rect x="6" y="66" width="12" height="18" rx="4" fill={heatColor(sideForward, max)} stroke="var(--color-border)" strokeWidth="1" />
         <rect x="6" y="90" width="12" height="18" rx="4" fill={heatColor(sideBack, max)} stroke="var(--color-border)" strokeWidth="1" />
-        {/* 数值标注 */}
-        <text x="38" y="62" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--color-text-1)">{left.toLocaleString()}</text>
-        <text x="82" y="62" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--color-text-1)">{right.toLocaleString()}</text>
-        <text x="60" y="52" textAnchor="middle" fontSize="8" fill="var(--color-text-3)">{middle.toLocaleString()}</text>
+        {/* 数值标注：仅短数值直接标在键位上（范围聚合的大数会溢出键区并与滚轮标注
+            重叠，图例列已给出精确值，大数不在轮廓内重复） */}
+        {left < 10_000 && <text x="38" y="62" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--color-text-1)">{left.toLocaleString()}</text>}
+        {right < 10_000 && <text x="82" y="62" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--color-text-1)">{right.toLocaleString()}</text>}
+        {middle > 0 && middle < 10_000 && <text x="60" y="52" textAnchor="middle" fontSize="8" fill="var(--color-text-3)">{middle.toLocaleString()}</text>}
         <text x="60" y="130" textAnchor="middle" fontSize="9" fill="var(--color-text-4)">鼠标</text>
       </svg>
 

@@ -18,6 +18,7 @@ import {
   usePcSummary,
   useProductivity,
   useSuggestionActions,
+  useKeystatsRange,
   useContextSuggestions,
 } from '../queries'
 import { todayBusinessDay, businessDayShift } from '@/lib/businessDay'
@@ -63,6 +64,8 @@ export function PcTrackerPage() {
   const focusBlocks = useFocusBlocks(scope)
   const lateNight = useLateNight(scope)
   const { data: suggestions = [] } = useContextSuggestions(date)
+  /* 键鼠范围聚合（GAP-1 已提供）：范围模式下键鼠热力的数据源 */
+  const keystatsRange = useKeystatsRange(range.start, range.end, mode === 'range', force)
 
   /* 活动热力（仅范围模式）：按天网格；dimension 固定 day（后端 hour 维度只返回起始日） */
   const heatGrid = useHeatmapGrid(range.start, range.end, 'day', mode === 'range', force)
@@ -149,24 +152,27 @@ export function PcTrackerPage() {
 
   /*
    * 活动热力数据：后端 grid 恒为「周行 × 星期(7)」按天形态（dimension=day）。
-   * 按日期合并（同一日期不会重复出现，但保持合并以防后端调整分桶）。
-   * 同时记录首个/末个有数据的日子，用于向用户解释范围前段的空白（无采集数据）。
+   * 数值 = keyPressCount（键盘原始按键计数，颜色深浅用；PC-3 修复后量纲已明确）。
+   * 日期归属：day 桶按业务日窗口切分（本地 04:00 起，即 UTC 前一日 20:00），
+   * 桶起点的 UTC 日期比业务日早一天，必须 +08:00 偏移后取本地日，否则整图偏移一天。
    */
   const heatCells = useMemo(() => {
     const grid = heatGrid.data?.grid ?? []
     const merged = new Map<string, { date: string; value: number }>()
     for (const row of grid) {
       for (const b of row ?? []) {
-        const day = b.start.slice(0, 10)
+        const ms = Date.parse(b.start)
+        if (Number.isNaN(ms)) continue
+        const day = new Date(ms + 8 * 3600_000).toISOString().slice(0, 10)
         const prev = merged.get(day)
-        if (prev) prev.value += Math.round(b.intensityScore)
-        else merged.set(day, { date: day, value: Math.round(b.intensityScore) })
+        if (prev) prev.value += Math.round(b.keyPressCount)
+        else merged.set(day, { date: day, value: Math.round(b.keyPressCount) })
       }
     }
     return [...merged.values()].sort((a, b) => a.date.localeCompare(b.date))
   }, [heatGrid.data])
 
-  /* 有效数据区间：首个/末个强度 >0 的日子（用于解释长范围前段的空白） */
+  /* 有效数据区间：首个/末个按键 >0 的日子（用于解释长范围前段的空白） */
   const heatDataRange = useMemo(() => {
     const active = heatCells.filter((c) => c.value > 0)
     if (active.length === 0) return null
@@ -176,7 +182,18 @@ export function PcTrackerPage() {
   }, [heatCells])
 
   const m = summary.data?.metrics
-  const ks = summary.data?.keystats
+  /* 键鼠数据源：单日取 summary.keystats；范围取键鼠范围聚合（字段同构，GAP-1 已提供） */
+  const ks = mode === 'day' ? summary.data?.keystats : keystatsRange.data
+  /*
+   * 活跃时长：按后端口径说明统一引用 summary.heatmap（activeMinutes 含「仅有键盘输入、
+   * 没有窗口事件」的分钟，9/27 由 569 → 722.8）；metrics.activeInputDuration 的旧口径
+   * 会出现「有效输入 > 记录时长」的矛盾展示，不再使用。
+   */
+  const activeMinutesTotal = useMemo(
+    () => Math.round((summary.data?.heatmap ?? []).reduce((a, b) => a + (b.activeMinutes ?? 0), 0)),
+    [summary.data],
+  )
+  const fmtHm = (min: number) => (min < 60 ? `${min}m` : `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}m`)
 
   return (
     <div className="space-y-5">
@@ -279,7 +296,7 @@ export function PcTrackerPage() {
       ) : (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <SummaryTile label="记录时长" value={m?.totalRecordedDuration ?? '—'} />
-          <SummaryTile label="有效输入" value={m?.activeInputDuration ?? '—'} />
+          <SummaryTile label="活跃时长" value={fmtHm(activeMinutesTotal)} title="按 summary.heatmap 口径：包含仅有键盘输入、没有窗口事件的分钟，故可能高于记录时长" />
           <SummaryTile label="按键总数" value={(ks?.keyPresses ?? 0).toLocaleString()} />
           <SummaryTile label="点击总数" value={(ks?.totalClicks ?? 0).toLocaleString()} />
           <SummaryTile label="待处理建议" value={String(suggestions.filter((s) => s.status === 'pending').length)} warn={suggestions.some((s) => s.status === 'pending')} />
@@ -395,7 +412,7 @@ export function PcTrackerPage() {
                   <GitHubHeatmap
                     days={heatCells}
                     ramp={HEAT_RAMP_BLUE}
-                    formatValue={(v) => `强度 ${v}`}
+                    formatValue={(v) => `按键 ${v.toLocaleString()} 次`}
                     maxWeeks={27}
                   />
                 )}
@@ -486,26 +503,25 @@ export function PcTrackerPage() {
       </div>
       )}
 
-      {/* 键盘 + 鼠标热力（仅单日：summary 为单日接口，后端无范围版逐键聚合） */}
-      {mode === 'day' && (
-        <Card className="p-4">
-          <div className="flex items-center gap-2">
-            <CardTitle>键盘热力图</CardTitle>
-            <span className="tnum ml-auto text-xs text-text-4">峰值 KPS {ks?.peakKps ?? 0} · CPS {ks?.peakCps ?? 0}</span>
-          </div>
-          <div className="mt-3 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
-            <KeyboardMatrix keyCounts={ks?.keyPressCounts ?? {}} />
-            <MouseHeatmap
-              left={ks?.leftClicks ?? 0}
-              middle={ks?.middleClicks ?? 0}
-              right={ks?.rightClicks ?? 0}
-              sideBack={ks?.sideBackClicks ?? 0}
-              sideForward={ks?.sideForwardClicks ?? 0}
-              scrollDistance={ks?.scrollDistance}
-            />
-          </div>
-        </Card>
-      )}
+      {/* 键盘 + 鼠标热力（单日=summary.keystats；范围=keystats 范围聚合，字段同构） */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle>键盘热力图</CardTitle>
+          {mode === 'range' && <span className="text-xs text-text-4">{range.start} ~ {range.end}</span>}
+          <span className="tnum ml-auto text-xs text-text-4">峰值 KPS {ks?.peakKps ?? 0} · CPS {ks?.peakCps ?? 0}</span>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
+          <KeyboardMatrix keyCounts={ks?.keyPressCounts ?? {}} />
+          <MouseHeatmap
+            left={ks?.leftClicks ?? 0}
+            middle={ks?.middleClicks ?? 0}
+            right={ks?.rightClicks ?? 0}
+            sideBack={ks?.sideBackClicks ?? 0}
+            sideForward={ks?.sideForwardClicks ?? 0}
+            scrollDistance={ks?.scrollDistance}
+          />
+        </div>
+      </Card>
 
       {/* 标注队列 + 上下文建议（仅单日：建议按业务日查询，重算也以该日为影响面） */}
       {mode === 'day' && (
@@ -521,9 +537,9 @@ export function PcTrackerPage() {
   )
 }
 
-function SummaryTile({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+function SummaryTile({ label, value, warn, title }: { label: string; value: string; warn?: boolean; title?: string }) {
   return (
-    <div className={cn('rounded-card border p-4', warn ? 'border-warn-border bg-warn-soft' : 'border-border bg-bg shadow-card')}>
+    <div className={cn('rounded-card border p-4', warn ? 'border-warn-border bg-warn-soft' : 'border-border bg-bg shadow-card')} title={title}>
       <div className="text-xs text-text-3">{label}</div>
       <div className="tnum mt-1 text-xl font-semibold text-text-1">{value}</div>
     </div>
@@ -609,12 +625,16 @@ export function LabelingQueue({ limit }: { limit: number }) {
  *
  * 显示名回退：建议对象可能没有友好名（appDisplayName 为空），
  * 此时从 clusterKey 解析（app:java → java；app:__idle__ → 空闲时段）。
+ *
+ * 归日（generatedForDate）：date 参数只决定后端扫描哪一天，返回的是全部待处理建议，
+ * 每条建议自带其业务日；预览/应用的影响范围必须用建议自己的日期（PC-6 修复后下发），
+ * 否则页面选 9.27 时会把影响面错套到 9.04 生成的旧建议上。
  */
 export function ContextConfirmationPanel({
   suggestions,
   date,
 }: {
-  suggestions: { id: string; clusterKey?: string | null; appDisplayName: string | null; sampleCount: number; suggestedCategory: string | null }[]
+  suggestions: { id: string; clusterKey?: string | null; appDisplayName: string | null; sampleCount: number; suggestedCategory: string | null; generatedForDate?: string | null }[]
   date: string
 }) {
   const actions = useSuggestionActions()
@@ -641,64 +661,70 @@ export function ContextConfirmationPanel({
       </div>
       <p className="mt-1 text-[11px] leading-4 text-text-4">
         对暂无分类规则的应用，系统会按使用上下文给出分类建议；确认后会沉淀到应用知识库，
-        之后同类应用自动归类。影响面为业务日 {date} 的记录。
+        之后同类应用自动归类。date 参数只决定扫描哪一天，返回的是全部待处理建议——
+        预览/应用的影响范围见每条建议自身的业务日。
       </p>
       <div className="mt-3 space-y-2">
         {suggestions.length === 0 ? (
           <EmptyState size="sm" title="没有待确认的分类建议" />
         ) : (
-          suggestions.map((s) => (
-            <div key={s.id} className="rounded-ctl border border-border px-3 py-2.5">
-              <div className="flex items-center gap-2 text-[13px]">
-                <span className="min-w-0 flex-1 truncate font-medium text-text-1">{displayName(s)}</span>
-                <span className="text-[11px] text-text-4">{s.sampleCount} 条记录</span>
+          suggestions.map((s) => {
+            /* 影响面 = 建议自己的业务日；generatedForDate 缺失时才退回页面所选日 */
+            const impactDate = s.generatedForDate ?? date
+            return (
+              <div key={s.id} className="rounded-ctl border border-border px-3 py-2.5">
+                <div className="flex items-center gap-2 text-[13px]">
+                  <span className="min-w-0 flex-1 truncate font-medium text-text-1">{displayName(s)}</span>
+                  <span className="tnum text-[11px] text-text-4">业务日 {impactDate}</span>
+                  <span className="text-[11px] text-text-4">{s.sampleCount} 条记录</span>
+                </div>
+                {s.suggestedCategory && (
+                  <p className="mt-0.5 text-xs text-text-3">建议分类：{s.suggestedCategory}</p>
+                )}
+                {error && <p className="mt-1 text-[11px] text-crit">{error}</p>}
+                {previewResult?.id === s.id && (
+                  <p className="mt-1 rounded-ctl bg-surface px-2 py-1 text-[11px] text-text-3">{previewResult.text}</p>
+                )}
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={actions.preview.isPending}
+                    onClick={async () => {
+                      setError(null)
+                      try {
+                        const res = await actions.preview.mutateAsync({ id: s.id, categoryName: s.suggestedCategory ?? undefined, date: impactDate })
+                        setPreviewResult({ id: s.id, text: `影响业务日 ${impactDate} 的 ${res.preview.affectedRecordCount} 条记录 / ${Math.round(res.preview.affectedDurationSeconds / 60)} 分钟` })
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : '预览失败')
+                      }
+                    }}
+                  >
+                    预览影响
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    loading={actions.apply.isPending}
+                    onClick={async () => {
+                      setError(null)
+                      try {
+                        await actions.apply.mutateAsync({ id: s.id, categoryName: s.suggestedCategory ?? undefined, date: impactDate })
+                        notifySuccess('已应用分类并沉淀知识')
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : '应用失败')
+                      }
+                    }}
+                  >
+                    应用
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => void actions.reject.mutateAsync(s.id)}>
+                    拒绝
+                  </Button>
+                </div>
               </div>
-              {s.suggestedCategory && (
-                <p className="mt-0.5 text-xs text-text-3">建议分类：{s.suggestedCategory}</p>
-              )}
-              {error && <p className="mt-1 text-[11px] text-crit">{error}</p>}
-              {previewResult?.id === s.id && (
-                <p className="mt-1 rounded-ctl bg-surface px-2 py-1 text-[11px] text-text-3">{previewResult.text}</p>
-              )}
-              <div className="mt-2 flex gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={actions.preview.isPending}
-                  onClick={async () => {
-                    setError(null)
-                    try {
-                      const res = await actions.preview.mutateAsync({ id: s.id, categoryName: s.suggestedCategory ?? undefined, date })
-                      setPreviewResult({ id: s.id, text: `影响 ${res.preview.affectedRecordCount} 条记录 / ${Math.round(res.preview.affectedDurationSeconds / 60)} 分钟` })
-                    } catch (e) {
-                      setError(e instanceof Error ? e.message : '预览失败')
-                    }
-                  }}
-                >
-                  预览影响
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  loading={actions.apply.isPending}
-                  onClick={async () => {
-                    setError(null)
-                    try {
-                      await actions.apply.mutateAsync({ id: s.id, categoryName: s.suggestedCategory ?? undefined, date })
-                      notifySuccess('已应用分类并沉淀知识')
-                    } catch (e) {
-                      setError(e instanceof Error ? e.message : '应用失败')
-                    }
-                  }}
-                >
-                  应用
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => void actions.reject.mutateAsync(s.id)}>
-                  拒绝
-                </Button>
-              </div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
     </Card>

@@ -1,12 +1,28 @@
 # PC Tracker 后端问题清单（Issues）
 
+> **状态更新（2026-09-30）**：后端已在测试 API `v2026.09.752` 中**全部修复** PC-1 ~ PC-7 与 GAP-1，
+> 并下发《PC记录接口变更与修复说明_20260930.md》。其中 **3 处为破坏性字段变更**，前端已同步适配：
+>
+> | 接口 | 变更 | 前端适配 |
+> | --- | --- | --- |
+> | `pc/activity-analysis` blocks[] | `intensityScore` → **`intensityLevel`/`intensityMax`**（0–5 档） | `types.ts`、`hourly-heat.ts` |
+> | `pc/summary` heatmap[] | `intensityScore` → **`intensityLevel`/`intensityMax`**（活跃分钟分档） | `types.ts` |
+> | `pc/heatmap/grid` cells | `intensityScore`（实为原始计数）→ **`keyPressCount`** + `intensityLevel`/`intensityMax` + 新增 `activeMinutes` | `types.ts`、`pc-tracker-page.tsx` |
+>
+> 行为变更要点：activity-analysis 覆盖全天且 `activeDurationSeconds ≤ 块时长`（可放心展示活跃分钟）；
+> `summary.heatmap.activeMinutes` 口径变宽（含仅键盘输入分钟，9/27 由 569 → 722.8 分钟）；
+> grid `dimension=hour` 跨日 → 400；分类建议返回全部待处理并逐条带 `generatedForDate`（`__IDLE__` 不再出现）；
+> 新端点 `GET /pc/aggregation/keystats?start&end`（键鼠范围聚合，字段与单日 keystats 同构）。
+> 两处推测被实测推翻：PC-1 真因是聚合分页截断（输入数据全天都在），PC-5 输入数据同样全天都在。
+> 回归验证脚本：`client-web/scripts/verify-backend-20260930.mjs`（12 项全 PASS）。
+
 > 依据：测试 API `https://pim.example.com:15860`（版本 2026.09.740）实测数据，
 > 复现命令均为 curl 可直接执行。业务日口径：Asia/Shanghai，04:00 起算。
 > 整理日期：2026-09-29。前端已对 PC-1/PC-2/PC-3/PC-4 做了规避，但根因在后端。
 
 ---
 
-## PC-1 activity-analysis 覆盖稀疏：仅少数小时有数据，远少于同期其他接口
+## ✅ PC-1 activity-analysis 覆盖稀疏：仅少数小时有数据，远少于同期其他接口（已修复）
 
 **现象**：`GET /api/v1/pc/activity-analysis?date=...&blockMinutes=60` 返回 24 个小时块，
 但绝大多数块 `activeDurationSeconds = 0`、`categories = []`、`apps = []`。
@@ -36,7 +52,7 @@ curl 'http://127.0.0.1:3000/api/v1/pc/activity-analysis?date=2026-09-27&blockMin
 
 ---
 
-## PC-2 activity-analysis 块内时长合计超过块本身时长
+## ✅ PC-2 activity-analysis 块内时长合计超过块本身时长（已修复：块内重叠消解，activeDurationSeconds 恒 ≤ 块时长）
 
 **现象**：`blockMinutes=60` 的块，块内 `apps`/`categories` 的 `durationSeconds`
 合计明显超过 3600 秒；`activeDurationSeconds` 本身也大于 3600。
@@ -66,7 +82,7 @@ curl 'http://127.0.0.1:3000/api/v1/pc/activity-analysis?date=2026-09-27&blockMin
 
 ---
 
-## PC-3 intensityScore 语义不一致：同名字段两种量纲
+## ✅ PC-3 intensityScore 语义不一致：同名字段两种量纲（已修复：统一改名 intensityLevel 0–5 档 + keyPressCount，破坏性变更）
 
 | 接口 | 量纲 | 实测值 |
 | --- | --- | --- |
@@ -83,7 +99,7 @@ curl 'http://127.0.0.1:3000/api/v1/pc/activity-analysis?date=2026-09-27&blockMin
 
 ---
 
-## PC-4 heatmap/grid 按 UTC 日切桶，而非业务日
+## ✅ PC-4 heatmap/grid 按 UTC 日切桶，而非业务日（已修复：day 桶改为业务日窗口 本地 04:00 ~ 次日 04:00）
 
 **现象**：`GET /api/v1/pc/heatmap/grid?...&dimension=day` 的桶起点是 UTC 零点
 （如 `2026-09-21T00:00:00Z` = 本地 08:00），而非业务日 04:00。
@@ -100,7 +116,7 @@ curl 'http://127.0.0.1:3000/api/v1/pc/activity-analysis?date=2026-09-27&blockMin
 
 ---
 
-## PC-5 采集数据可靠性不足，且输入类数据只覆盖部分时段
+## ✅ PC-5 采集数据可靠性不足，且输入类数据只覆盖部分时段（已修复：quality 区分采集停机 vs 数据滞后并给缺数时段；输入数据实测全天都在）
 
 **现象**：`GET /api/v1/pc/quality` 报 `overallStatus=3`（故障）
 "所选范围内的 PC 事实数据可靠性不足"；`tracker-events` 组件事件数偏低
@@ -117,7 +133,7 @@ curl 'http://127.0.0.1:3000/api/v1/pc/activity-analysis?date=2026-09-27&blockMin
 
 ---
 
-## PC-6 分类建议包含「空闲时段」簇，且样本日期与所选业务日无关
+## ✅ PC-6 分类建议包含「空闲时段」簇，且样本日期与所选业务日无关（已修复：__IDLE__ 不再出现，逐条下发 generatedForDate，date 语义已明确为「只决定扫描哪天」）
 
 **现象**：`GET /api/v1/pc/classification/suggestions?date=2026-09-27` 返回 2 条：
 
@@ -138,7 +154,7 @@ curl 'http://127.0.0.1:3000/api/v1/pc/activity-analysis?date=2026-09-27&blockMin
 
 ---
 
-## PC-7（低优先级）heatmap/grid 的 hour 维度只返回起始日 24 桶
+## ✅ PC-7（低优先级）heatmap/grid 的 hour 维度只返回起始日 24 桶（已修复：跨日 + hour 返回 400 + 明确文案）
 
 `dimension=hour` 时返回 `start` 当日的 24 个小时桶单行（规格已有备注），
 跨日范围下其余日期被忽略。前端曾因该行为把整图打坏（现已移除该用法）。
@@ -149,7 +165,7 @@ curl 'http://127.0.0.1:3000/api/v1/pc/activity-analysis?date=2026-09-27&blockMin
 
 ## 功能缺口（非缺陷，供排期参考）
 
-### GAP-1 键鼠逐键分布没有范围版聚合
+### ✅ GAP-1 键鼠逐键分布没有范围版聚合（已实现：GET /pc/aggregation/keystats?start&end，字段与单日 keystats 同构）
 
 `summary.keystats`（keyPressCounts / 左右键 / 滚轮）只支持单日 `date`；
 聚合组（`/pc/aggregation/*`，共 4 个：focus-blocks / app-usage / late-night /

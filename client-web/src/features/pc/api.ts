@@ -36,6 +36,11 @@ export const pcApi = {
     apiGet<PcActivityAnalysis>(
       `/api/v1/pc/activity-analysis?date=${date}&blockMinutes=${blockMinutes}${force ? '&force=true' : ''}`,
     ),
+  /** 键鼠范围聚合（GAP-1：与单日 keystats 同构，字段不随天数膨胀） */
+  keystatsRange: (params: { start: string; end: string; force?: boolean }) =>
+    apiGet<PcSummaryResponse['keystats']>(
+      `/api/v1/pc/aggregation/keystats?start=${params.start}&end=${params.end}${params.force ? '&force=true' : ''}`,
+    ),
   /** 聚合组公共参数（date 或 start/end 二选一 + timezone + force） */
   appUsage: (params: { date?: string; start?: string; end?: string; timezone?: string; limit?: number; force?: boolean }) => {
     const q = new URLSearchParams()

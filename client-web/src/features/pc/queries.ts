@@ -49,6 +49,15 @@ export function useHeatmapGrid(start: string, end: string, dimension: string, en
   })
 }
 
+/** 键鼠范围聚合（GAP-1：30/90 天一次请求，字段与单日 keystats 同构） */
+export function useKeystatsRange(start: string, end: string, enabled = true, force = false) {
+  return useQuery({
+    queryKey: [...pcKeys.heatmap(start, end, 'keystats'), force],
+    queryFn: () => pcApi.keystatsRange({ start, end, force }),
+    enabled,
+  })
+}
+
 export function useActivityAnalysis(date: string, enabled = true, force = false) {
   return useQuery({
     queryKey: [...pcKeys.activity(date), force],

@@ -21,17 +21,36 @@ export interface KeystatsSummary {
   topKeys?: { keyName: string; count: number; share: number }[]
 }
 
+/** summary.heatmap 的逐小时桶（业务日 04:00 起算，24 桶） */
 export interface HeatmapBucket {
   start: string
   end: string
   hour: number
   activeMinutes: number
   totalEvents: number
-  intensityScore: number
+  /** 0–5 强度档（活跃分钟：≤5→1、≤15→2、≤30→3、≤45→4、>45→5） */
+  intensityLevel: number
+  /** 档位上限（=5），随响应下发 */
+  intensityMax: number
+}
+
+/** heatmap/grid 的桶（day/month/year 维度；PC-4 修复后按业务日窗口切分） */
+export interface HeatmapGridBucket {
+  start: string
+  end: string
+  hour: number
+  /** 该桶活跃分钟（day/month/year 维度现在有值） */
+  activeMinutes: number
+  totalEvents: number
+  /** 键盘原始按键计数（色阶深浅用） */
+  keyPressCount: number
+  /** 0–5 强度档 */
+  intensityLevel: number
+  intensityMax: number
 }
 
 export interface HeatmapGridResponse {
-  grid: HeatmapBucket[][]
+  grid: HeatmapGridBucket[][]
   dimension: string
   maxKeyCount: number
 }
@@ -74,7 +93,10 @@ export interface PcActivityAnalysis {
   blocks: {
     start: string
     end: string
-    intensityScore: number
+    /** 0–5 强度档（活跃时长占块时长比例） */
+    intensityLevel: number
+    intensityMax: number
+    /** 活跃墙钟秒（重叠消解后，恒 ≤ 块时长） */
     activeDurationSeconds: number
     pendingClassificationCount: number
     contextSwitchCount: number
@@ -133,6 +155,8 @@ export interface ContextSuggestion {
   suggestedCategory: string | null
   appDisplayName: string | null
   status: string
+  /** 该建议的业务日（后端 PC-6 修复后下发；date 参数只决定扫描哪天，返回的是全部待处理） */
+  generatedForDate: string | null
 }
 
 /* ── 浏览器站点（browser-tt） ─────────────────────────────── */

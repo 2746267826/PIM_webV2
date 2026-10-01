@@ -6,7 +6,7 @@ const heat = (hour: number, over: Record<string, unknown> = {}) => ({
   // hour 为本地小时；本地 h 点 = UTC (h-8) 点
   start: `2026-09-27T${String((hour - 8 + 24) % 24).padStart(2, '0')}:00:00.0000000+00:00`,
   activeMinutes: 0,
-  intensityScore: 0,
+  intensityLevel: 0,
   totalEvents: 0,
   ...over,
 })
@@ -14,7 +14,7 @@ const heat = (hour: number, over: Record<string, unknown> = {}) => ({
 describe('buildHourlyHeatRows（时间块热力数据合并）', () => {
   it('以 heatmap 为主体：本地小时标签与 +08:00 换算一致', () => {
     const rows = buildHourlyHeatRows(
-      [heat(11, { activeMinutes: 40, intensityScore: 4, totalEvents: 120 })],
+      [heat(11, { activeMinutes: 40, intensityLevel: 4, totalEvents: 120 })],
       [],
     )
     expect(rows).toHaveLength(1)
@@ -82,7 +82,7 @@ describe('buildHourlyHeatRows（时间块热力数据合并）', () => {
 
   it('字段为 null 时不产生 NaN/undefined', () => {
     const rows = buildHourlyHeatRows(
-      [{ start: '2026-09-27T03:00:00Z', activeMinutes: null, intensityScore: null, totalEvents: null }],
+      [{ start: '2026-09-27T03:00:00Z', activeMinutes: null, intensityLevel: null, totalEvents: null }],
       [{ start: '2026-09-27T03:00:00Z', pendingClassificationCount: null, apps: [{ appName: null, durationSeconds: null }] }],
     )
     expect(rows[0].activeMinutes).toBe(0)
