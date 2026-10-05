@@ -1,8 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, lazy, Suspense, useCallback, useContext, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { QuickNoteDialog, type QuickNoteDialogTarget } from '@/features/quick-notes/components/quick-note-dialog'
-import { TaskEditorDialog } from '@/features/calendar/components/task-editor-dialog'
-import { EventEditorDialog } from '@/features/calendar/components/event-editor-dialog'
+import type { QuickNoteDialogTarget } from '@/features/quick-notes/components/quick-note-dialog'
 import { useCalendars, useTaskBooks } from '@/features/calendar/queries'
 import type { QuickNoteDetail } from '@/features/quick-notes/types'
 import type { EventResponse, TaskResponse } from '@/features/calendar/types'
@@ -23,6 +21,14 @@ interface GlobalEditorsValue {
   /** 新建/编辑日程 */
   openEvent: (event?: EventResponse | null, initial?: { start: Date; end: Date } | null) => void
 }
+
+/*
+ * 三个全局弹窗懒加载：它们只在打开时渲染，但编辑器本体（TipTap 等）很重，
+ * 同步引入会把入口 chunk 拖大数百 KB。Suspense fallback=null：未加载时视为未打开。
+ */
+const QuickNoteDialog = lazy(() => import('@/features/quick-notes/components/quick-note-dialog').then((m) => ({ default: m.QuickNoteDialog })))
+const TaskEditorDialog = lazy(() => import('@/features/calendar/components/task-editor-dialog').then((m) => ({ default: m.TaskEditorDialog })))
+const EventEditorDialog = lazy(() => import('@/features/calendar/components/event-editor-dialog').then((m) => ({ default: m.EventEditorDialog })))
 
 const GlobalEditorsContext = createContext<GlobalEditorsValue | null>(null)
 
@@ -58,17 +64,19 @@ export function GlobalEditorsProvider({ children }: { children: ReactNode }) {
     <GlobalEditorsContext.Provider value={value}>
       {children}
 
-      <QuickNoteDialog target={noteTarget} onClose={() => setNoteTarget(null)} />
+      <Suspense fallback={null}>
+        <QuickNoteDialog target={noteTarget} onClose={() => setNoteTarget(null)} />
 
-      <TaskEditorDialog open={taskOpen} onOpenChange={setTaskOpen} taskBooks={taskBooks} task={task} />
+        <TaskEditorDialog open={taskOpen} onOpenChange={setTaskOpen} taskBooks={taskBooks} task={task} />
 
-      <EventEditorDialog
-        open={eventState.open}
-        onOpenChange={(o) => !o && setEventState({ open: false })}
-        calendars={calendars}
-        event={eventState.open ? eventState.event : null}
-        initial={eventState.open ? eventState.initial : null}
-      />
+        <EventEditorDialog
+          open={eventState.open}
+          onOpenChange={(o) => !o && setEventState({ open: false })}
+          calendars={calendars}
+          event={eventState.open ? eventState.event : null}
+          initial={eventState.open ? eventState.initial : null}
+        />
+      </Suspense>
     </GlobalEditorsContext.Provider>
   )
 }

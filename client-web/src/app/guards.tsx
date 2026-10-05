@@ -1,4 +1,5 @@
-import { Navigate, Outlet, useLocation } from 'react-router'
+import { Navigate, useLocation } from 'react-router'
+import { LazyOutlet } from './lazy-outlet'
 import { useAuth } from '@/features/auth/auth-context'
 import { needsServerSetup } from '@/lib/apiBase'
 import { EmptyState, Spinner } from '@/components/ui'
@@ -7,7 +8,7 @@ import { ShieldAlert } from 'lucide-react'
 /** 壳内未配置 API 地址 → 强制进入首启向导 */
 export function RequireSetup() {
   if (needsServerSetup()) return <Navigate to="/setup" replace />
-  return <Outlet />
+  return <LazyOutlet />
 }
 
 /** 认证守卫：未登录重定向 /login（成功后回跳原 URL） */
@@ -31,7 +32,7 @@ export function RequireAuth() {
       />
     )
   }
-  return <Outlet />
+  return <LazyOutlet />
 }
 
 /**
@@ -57,5 +58,5 @@ export function RequireAdmin() {
       />
     )
   }
-  return <Outlet />
+  return <LazyOutlet />
 }

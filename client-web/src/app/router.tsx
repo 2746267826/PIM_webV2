@@ -1,48 +1,76 @@
+import { lazy, Suspense, type ComponentType } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router'
+import { Spinner } from '@/components/ui'
 import { RequireAdmin, RequireAuth, RequireSetup } from './guards'
 import { AppShell } from './shell/app-shell'
-import { LoginPage } from '@/features/auth/pages/login-page'
-import { SetupPage } from '@/features/server/pages/setup-page'
-import { ServerSettingsPage } from '@/features/server/pages/server-settings-page'
-import { SettingsHubPage } from '@/features/settings/pages/settings-hub-page'
 import { NotFoundPage, UnderConstruction } from '@/features/placeholders/under-construction'
-import { CalendarPage } from '@/features/calendar/pages/calendar-page'
-import { TasksPage } from '@/features/calendar/pages/tasks-page'
-import { TodayPage } from '@/features/today/pages/today-page'
-import { ConfirmationsPage } from '@/features/operations/pages/confirmations-page'
-import { CalendarStylesPage } from '@/features/calendar/styles/calendar-styles-page'
-import { WorkbenchPage } from '@/features/workbench/pages/workbench-page'
-import { RemindersPage } from '@/features/calendar/pages/reminders-page'
-import { ReportsPage } from '@/features/calendar/pages/reports-page'
-import { HabitsPage } from '@/features/calendar/pages/habits-page'
-import { QuickNotesPage } from '@/features/quick-notes/pages/quick-notes-page'
-import { DataCenterPage } from '@/features/calendar/pages/data-center-page'
-import { AuditTimelinePage } from '@/features/operations/pages/audit-timeline-page'
-import { PcTrackerPage } from '@/features/pc/pages/pc-tracker-page'
-import { BrowserPage } from '@/features/pc/pages/browser-page'
-import { MobileRecordsPage } from '@/features/mobile/pages/mobile-records-page'
-import { LocationHistoryPage } from '@/features/mobile/pages/location-history-page'
-import { DevicesPage } from '@/features/mobile/pages/devices-page'
-import { DeviceDetailPage } from '@/features/mobile/pages/device-detail-page'
-import { StatusPage } from '@/features/operations/pages/status-page'
-import { FilesPage } from '@/features/files/pages/files-page'
-import { MicrosoftPage } from '@/features/settings/microsoft/microsoft-page'
-import { AppKnowledgeBasePage, CategoryTreePage } from '@/features/knowledge/pages/app-knowledge-page'
-import { EndpointShellPage } from '@/features/endpoints/pages/endpoint-shell-page'
 import { AndroidTodayEmbedPage, AndroidTracksEmbedPage } from '@/embed/android/android-embed-pages'
-import {
-  AdminUsersPage,
-  AiSettingsPage,
-  CalendarDataManagerPage,
-  DataReliabilityPage,
-  McpSettingsPage,
-  PcDetailQueryPage,
-  RecycleBinPage,
-} from '@/features/settings/pages/settings-pages'
+
+/*
+ * 路由级代码分包：feature 页面全部 React.lazy（ECharts/FullCalendar/TipTap/Leaflet
+ * 等大依赖跟随各自页面 chunk，不再进首屏）。壳（AppShell）、守卫、404/占位、
+ * Android 内嵌页保持同步（壳常驻无意义分包；内嵌页是 WebView 启动路径，避免闪变）。
+ */
+
+const lazyPage = (load: () => Promise<Record<string, unknown>>, name: string) =>
+  lazy(async () => {
+    const m = (await load()) as Record<string, ComponentType>
+    return { default: m[name] }
+  })
+
+const LoginPage = lazyPage(() => import('@/features/auth/pages/login-page'), 'LoginPage')
+const SetupPage = lazyPage(() => import('@/features/server/pages/setup-page'), 'SetupPage')
+const ServerSettingsPage = lazyPage(() => import('@/features/server/pages/server-settings-page'), 'ServerSettingsPage')
+const SettingsHubPage = lazyPage(() => import('@/features/settings/pages/settings-hub-page'), 'SettingsHubPage')
+
+const TodayPage = lazyPage(() => import('@/features/today/pages/today-page'), 'TodayPage')
+const CalendarPage = lazyPage(() => import('@/features/calendar/pages/calendar-page'), 'CalendarPage')
+const TasksPage = lazyPage(() => import('@/features/calendar/pages/tasks-page'), 'TasksPage')
+const ConfirmationsPage = lazyPage(() => import('@/features/operations/pages/confirmations-page'), 'ConfirmationsPage')
+const CalendarStylesPage = lazyPage(() => import('@/features/calendar/styles/calendar-styles-page'), 'CalendarStylesPage')
+const WorkbenchPage = lazyPage(() => import('@/features/workbench/pages/workbench-page'), 'WorkbenchPage')
+const RemindersPage = lazyPage(() => import('@/features/calendar/pages/reminders-page'), 'RemindersPage')
+const ReportsPage = lazyPage(() => import('@/features/calendar/pages/reports-page'), 'ReportsPage')
+const HabitsPage = lazyPage(() => import('@/features/calendar/pages/habits-page'), 'HabitsPage')
+const QuickNotesPage = lazyPage(() => import('@/features/quick-notes/pages/quick-notes-page'), 'QuickNotesPage')
+const DataCenterPage = lazyPage(() => import('@/features/calendar/pages/data-center-page'), 'DataCenterPage')
+const AuditTimelinePage = lazyPage(() => import('@/features/operations/pages/audit-timeline-page'), 'AuditTimelinePage')
+
+const PcTrackerPage = lazyPage(() => import('@/features/pc/pages/pc-tracker-page'), 'PcTrackerPage')
+const BrowserPage = lazyPage(() => import('@/features/pc/pages/browser-page'), 'BrowserPage')
+
+const MobileRecordsPage = lazyPage(() => import('@/features/mobile/pages/mobile-records-page'), 'MobileRecordsPage')
+const LocationHistoryPage = lazyPage(() => import('@/features/mobile/pages/location-history-page'), 'LocationHistoryPage')
+const DevicesPage = lazyPage(() => import('@/features/mobile/pages/devices-page'), 'DevicesPage')
+const DeviceDetailPage = lazyPage(() => import('@/features/mobile/pages/device-detail-page'), 'DeviceDetailPage')
+
+const FilesPage = lazyPage(() => import('@/features/files/pages/files-page'), 'FilesPage')
+const MicrosoftPage = lazyPage(() => import('@/features/settings/microsoft/microsoft-page'), 'MicrosoftPage')
+const AppKnowledgeBasePage = lazyPage(() => import('@/features/knowledge/pages/app-knowledge-page'), 'AppKnowledgeBasePage')
+const CategoryTreePage = lazyPage(() => import('@/features/knowledge/pages/app-knowledge-page'), 'CategoryTreePage')
+const EndpointShellPage = lazyPage(() => import('@/features/endpoints/pages/endpoint-shell-page'), 'EndpointShellPage')
+const StatusPage = lazyPage(() => import('@/features/operations/pages/status-page'), 'StatusPage')
+
+/* 设置子页同文件，共享一个 chunk */
+const settingsPages = () => import('@/features/settings/pages/settings-pages')
+const AdminUsersPage = lazyPage(settingsPages, 'AdminUsersPage')
+const AiSettingsPage = lazyPage(settingsPages, 'AiSettingsPage')
+const CalendarDataManagerPage = lazyPage(settingsPages, 'CalendarDataManagerPage')
+const DataReliabilityPage = lazyPage(settingsPages, 'DataReliabilityPage')
+const McpSettingsPage = lazyPage(settingsPages, 'McpSettingsPage')
+const PcDetailQueryPage = lazyPage(settingsPages, 'PcDetailQueryPage')
+const RecycleBinPage = lazyPage(settingsPages, 'RecycleBinPage')
 
 /** 路由表（对应规格 01 §4 全量路由；P0 先通骨架与设置域，其余为占位页） */
 export const router = createBrowserRouter([
-  { path: '/setup', element: <SetupPage /> },
+  {
+    path: '/setup',
+    element: (
+      <Suspense fallback={<div className="grid min-h-dvh place-items-center"><Spinner className="size-6" /></div>}>
+        <SetupPage />
+      </Suspense>
+    ),
+  },
   {
     element: <RequireSetup />,
     children: [

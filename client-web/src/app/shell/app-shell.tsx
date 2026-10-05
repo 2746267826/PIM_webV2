@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, Outlet, useLocation } from 'react-router'
+import { Link, useLocation } from 'react-router'
+import { LazyOutlet } from '../lazy-outlet'
 import { Menu } from 'lucide-react'
 import { APP_VERSION, useVersionInfo } from '@/api/version'
 import { StatusBadge } from '@/components/ui'
@@ -93,7 +94,7 @@ export function AppShell() {
         {/* 主内容区：外壳内唯一滚动容器；每页独立错误边界 */}
         <main className="min-w-0 flex-1 overflow-y-auto px-4 py-4 md:px-5 md:py-5 lg:px-6 lg:py-6">
           <ErrorBoundary level="page">
-            <Outlet />
+            <LazyOutlet />
           </ErrorBoundary>
         </main>
       </div>

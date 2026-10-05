@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { BatteryWarning, RefreshCw, Smartphone } from 'lucide-react'
@@ -6,7 +6,11 @@ import { apiGet } from '@/api/client'
 import { hasNativeBridge, reportPageState, requestNativeState, type NativeCollectionState } from './bridge'
 import { todayBusinessDay } from '@/lib/businessDay'
 import { formatDuration, formatTime } from '@/lib/datetime'
-import { EChartsBox } from '@/components/viz/echarts-box'
+/*
+ * EChartsBox 懒加载：内嵌页是 WebView 启动路径，保持轻量——
+ * ECharts（数百 KB）只在图表真正出现时加载，骨架占位。
+ */
+const EChartsBox = lazy(() => import('@/components/viz/echarts-box').then((m) => ({ default: m.EChartsBox })))
 import { Button, Card, CardTitle, EmptyState, MetricCard, Skeleton, StatusBadge } from '@/components/ui'
 import { cn } from '@/lib/utils'
 
@@ -200,7 +204,9 @@ export function AndroidTodayEmbedPage() {
       {sparkline && (
         <Card className="p-3">
           <CardTitle className="text-[13px]">今日轨迹</CardTitle>
-          <EChartsBox option={sparkline} height={110} />
+          <Suspense fallback={<Skeleton className="h-[110px]" />}>
+            <EChartsBox option={sparkline} height={110} />
+          </Suspense>
         </Card>
       )}
 
@@ -299,7 +305,9 @@ export function AndroidTracksEmbedPage() {
         {tracks.isLoading ? (
           <Skeleton className="mt-2 h-48" />
         ) : chart ? (
-          <EChartsBox option={chart} height={240} />
+          <Suspense fallback={<Skeleton className="mt-2 h-48" />}>
+            <EChartsBox option={chart} height={240} />
+          </Suspense>
         ) : (
           <EmptyState size="sm" title="今天还没有轨迹" description="设备上报定位点后自动绘制。" />
         )}
