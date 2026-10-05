@@ -87,6 +87,60 @@ body {
   }
 }
 
+/* ── 退场动效：Radix 弹层 data-state="closed" 期间播放，动画结束自动卸载 ──
+ * transform 与 Tailwind v4 的 translate 属性分属两层，居中位移不会被打断。 */
+@keyframes pim-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes pim-pop-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+@keyframes pim-slide-out-right {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes pim-slide-out-left {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+
+.pim-dialog-overlay[data-state='closed'] {
+  animation: pim-fade-out 150ms ease-in both;
+}
+.pim-dialog-content[data-state='closed'] {
+  animation: pim-pop-out 150ms ease-in both;
+}
+.pim-drawer-right[data-state='closed'] {
+  animation: pim-slide-out-right 180ms ease-in both;
+}
+.pim-drawer-left[data-state='closed'] {
+  animation: pim-slide-out-left 180ms ease-in both;
+}
+
 /* 动效兜底：系统要求减少动效时全部禁用 */
 @media (prefers-reduced-motion: reduce) {
   *,

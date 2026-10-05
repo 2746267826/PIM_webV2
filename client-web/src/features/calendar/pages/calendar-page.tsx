@@ -766,20 +766,13 @@ function nextHourPlus(): Date {
 
 function CalendarSegmented({ view, onChange }: { view: CalView; onChange: (v: CalView) => void }) {
   return (
-    <div className="inline-flex items-center rounded-full bg-surface-2 p-[3px]">
-      {(['timeline', 'week', 'month', 'list'] as const).map((v) => (
-        <button
-          key={v}
-          type="button"
-          onClick={() => onChange(v)}
-          className={cn(
-            'h-7 rounded-full px-3 text-[13px] font-medium text-text-3 transition-colors',
-            view === v && 'bg-bg text-primary shadow-card',
-          )}
-        >
-          {CAL_VIEW_LABEL[v]}
-        </button>
-      ))}
-    </div>
+    <Segmented
+      value={view}
+      onValueChange={(v) => onChange(v as CalView)}
+      options={(['timeline', 'week', 'month', 'list'] as const).map((v) => ({
+        value: v,
+        label: CAL_VIEW_LABEL[v],
+      }))}
+    />
   )
 }

@@ -262,7 +262,8 @@
   opacity: 0.9 !important;
   border-radius: 8px !important;
   box-shadow: 0 8px 24px rgb(15 23 42 / 0.28) !important;
-  transform: scale(1.02);
+  /* 微倾斜：拖拽中的"实体感"（FC 用 left/top 定位镜像，transform 不冲突） */
+  transform: scale(1.02) rotate(2deg);
   cursor: grabbing !important;
 }
 /* 拖拽经过的可落位时间槽高亮 */

@@ -1,14 +1,16 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import { useAnimationEndFallback } from './exit-guard'
 import { cn } from '@/lib/utils'
 
 export const Drawer = DialogPrimitive.Root
 export const DrawerClose = DialogPrimitive.Close
 
 const sideClasses = {
-  right: 'inset-y-0 right-0 w-[420px] max-w-[calc(100dvw-24px)] animate-[pim-slide-in-right_240ms_cubic-bezier(.32,.72,.24,1)]',
-  left: 'inset-y-0 left-0 w-[280px] max-w-[calc(100dvw-56px)] animate-[pim-slide-in-left_240ms_cubic-bezier(.32,.72,.24,1)]',
+  right:
+    'pim-drawer-right inset-y-0 right-0 w-[420px] max-w-[calc(100dvw-24px)] animate-[pim-slide-in-right_240ms_cubic-bezier(.32,.72,.24,1)]',
+  left: 'pim-drawer-left inset-y-0 left-0 w-[280px] max-w-[calc(100dvw-56px)] animate-[pim-slide-in-left_240ms_cubic-bezier(.32,.72,.24,1)]',
 }
 
 export function DrawerContent({
@@ -20,10 +22,20 @@ export function DrawerContent({
   className?: string
   children: ReactNode
 }) {
+  /* 退场兜底：同 dialog（动画时钟冻结时 Radix 等不到 animationend） */
+  const [overlayNode, setOverlayNode] = useState<HTMLElement | null>(null)
+  const [contentNode, setContentNode] = useState<HTMLElement | null>(null)
+  useAnimationEndFallback(overlayNode)
+  useAnimationEndFallback(contentNode)
+
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-text-1/30 animate-[pim-fade-in_200ms_ease-out]" />
+      <DialogPrimitive.Overlay
+        ref={setOverlayNode}
+        className="pim-dialog-overlay fixed inset-0 z-40 bg-text-1/30 animate-[pim-fade-in_200ms_ease-out]"
+      />
       <DialogPrimitive.Content
+        ref={setContentNode}
         className={cn(
           'fixed z-50 flex flex-col bg-bg shadow-modal outline-none',
           sideClasses[side],

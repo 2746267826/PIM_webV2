@@ -1,6 +1,7 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
-import type { HTMLAttributes, ReactNode } from 'react'
+import { useState, type HTMLAttributes, type ReactNode } from 'react'
+import { useAnimationEndFallback } from './exit-guard'
 import { cn } from '@/lib/utils'
 
 export const Dialog = DialogPrimitive.Root
@@ -16,12 +17,22 @@ export function DialogContent({
   children: ReactNode
   showClose?: boolean
 }) {
+  /* 退场兜底：动画时钟冻结（后台标签/WebView）时 Radix 等不到 animationend，需手动补发 */
+  const [overlayNode, setOverlayNode] = useState<HTMLElement | null>(null)
+  const [contentNode, setContentNode] = useState<HTMLElement | null>(null)
+  useAnimationEndFallback(overlayNode)
+  useAnimationEndFallback(contentNode)
+
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-text-1/30 animate-[pim-fade-in_200ms_ease-out]" />
+      <DialogPrimitive.Overlay
+        ref={setOverlayNode}
+        className="pim-dialog-overlay fixed inset-0 z-40 bg-text-1/30 animate-[pim-fade-in_200ms_ease-out]"
+      />
       <DialogPrimitive.Content
+        ref={setContentNode}
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-48px)] w-[calc(100dvw-32px)] max-w-[560px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-modal border border-border bg-bg shadow-modal outline-none animate-[pim-pop-in_200ms_cubic-bezier(.32,.72,.24,1)]',
+          'pim-dialog-content fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-48px)] w-[calc(100dvw-32px)] max-w-[560px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-modal border border-border bg-bg shadow-modal outline-none animate-[pim-pop-in_200ms_cubic-bezier(.32,.72,.24,1)]',
           className,
         )}
       >

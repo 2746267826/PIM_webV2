@@ -7,6 +7,7 @@ import { summarizeLines } from '@/lib/text'
 import { EmptyState, Skeleton } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { buildEventListSections, wallClockTime, type ListRowItem } from './event-list-model'
+import { StaggerItem } from '@/components/motion/primitives'
 
 /*
  * 列表视图（自定义，替代 FullCalendar listWeek）：
@@ -54,6 +55,16 @@ export function EventListView({
   const hasMore = Boolean(eventsQ.hasNextPage)
   const initialLoading = eventsQ.isLoading
 
+  /* 行入场 stagger 的全局序号（跨日分组连续计数，封顶逻辑在 StaggerItem 内） */
+  const rowOffsets = useMemo(() => {
+    let n = 0
+    return sections.map((s) => {
+      const offset = n
+      n += s.items.length
+      return offset
+    })
+  }, [sections])
+
   /* 无限下滑：sentinel 进入滚动容器视口前 320px → 请求下一页 */
   const scrollRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -91,15 +102,17 @@ export function EventListView({
             />
           </div>
         ) : (
-          sections.map((s) => (
+          sections.map((s, si) => (
             <section key={s.day}>
               <header className="flex items-baseline justify-between border-b border-border bg-surface px-4 py-2">
                 <span className="text-[13px] font-semibold text-text-1">{s.dateLabel}</span>
                 <span className="tnum text-xs text-text-3">{s.weekdayLabel}</span>
               </header>
               <div className="divide-y divide-border/70">
-                {s.items.map((item) => (
-                  <ListRow key={item.key} item={item} calendars={calendars} onOpenEvent={onOpenEvent} />
+                {s.items.map((item, ii) => (
+                  <StaggerItem key={item.key} index={rowOffsets[si] + ii}>
+                    <ListRow item={item} calendars={calendars} onOpenEvent={onOpenEvent} />
+                  </StaggerItem>
                 ))}
               </div>
             </section>
