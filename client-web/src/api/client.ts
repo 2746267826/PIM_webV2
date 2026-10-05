@@ -143,6 +143,16 @@ export async function apiFetch<T>(
     res = await rawFetch(path, init, opts)
   }
 
+  /*
+   * 429 限流：按 Retry-After（秒，缺省 1）等待后重试一次。
+   * 只重试一次且不重放非幂等语义问题——服务端限流本身即幂等保护，重放安全。
+   */
+  if (res.status === 429 && !allow.has(429)) {
+    const retryAfter = Math.min(Number(res.headers.get('retry-after') ?? '1') || 1, 5)
+    await new Promise((r) => setTimeout(r, retryAfter * 1000))
+    res = await rawFetch(path, init, opts)
+  }
+
   if (res.status === 204) return undefined as T
 
   const contentType = res.headers.get('content-type') ?? ''

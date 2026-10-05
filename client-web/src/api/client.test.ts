@@ -98,6 +98,50 @@ describe('apiFetch 基础行为', () => {
       apiFetch('/api/v1/calendar/outlook/events/writeback', { method: 'POST', body: {} }, { allowStatuses: [409, 412] }),
     ).resolves.toMatchObject({ status: 'conflict' })
   })
+
+  it('429 按 Retry-After 等待后重试一次并成功', async () => {
+    const sleeps: number[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementationOnce(async () =>
+          new Response(JSON.stringify({ code: 42901, message: 'too many', data: null }), {
+            status: 429,
+            headers: { 'content-type': 'application/json', 'retry-after': '2' },
+          }),
+        )
+        .mockImplementationOnce(async () => jsonResponse({ code: 0, message: 'ok', data: { ok: true }, timestamp: 't' })),
+    )
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn((fn: () => void, ms: number) => {
+        sleeps.push(ms)
+        fn()
+        return 0 as unknown as ReturnType<typeof setTimeout>
+      }),
+    )
+    await expect(apiFetch('/api/v1/x')).resolves.toEqual({ ok: true })
+    expect(sleeps).toContain(2000)
+  })
+
+  it('429 重试一次仍失败则抛错（不无限重试）', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({ code: 42901, message: 'too many', data: null }, 429),
+      ),
+    )
+    vi.stubGlobal(
+      'setTimeout',
+      vi.fn((fn: () => void) => {
+        fn()
+        return 0 as unknown as ReturnType<typeof setTimeout>
+      }),
+    )
+    const err = await apiFetch('/api/v1/x').catch((e) => e)
+    expect(err).toBeInstanceOf(ApiError)
+  })
 })
 
 describe('401 单飞刷新', () => {

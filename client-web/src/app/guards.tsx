@@ -2,7 +2,7 @@ import { Navigate, useLocation } from 'react-router'
 import { LazyOutlet } from './lazy-outlet'
 import { useAuth } from '@/features/auth/auth-context'
 import { needsServerSetup } from '@/lib/apiBase'
-import { EmptyState, Spinner } from '@/components/ui'
+import { Button, EmptyState, Spinner } from '@/components/ui'
 import { ShieldAlert } from 'lucide-react'
 
 /** 壳内未配置 API 地址 → 强制进入首启向导 */
@@ -13,13 +13,32 @@ export function RequireSetup() {
 
 /** 认证守卫：未登录重定向 /login（成功后回跳原 URL） */
 export function RequireAuth() {
-  const { user, booting } = useAuth()
+  const { user, booting, bootError, retryBoot } = useAuth()
   const location = useLocation()
 
   if (booting) {
     return (
       <div className="grid min-h-dvh place-items-center">
         <Spinner className="size-6" />
+      </div>
+    )
+  }
+  /*
+   * 引导失败（5xx/网络）≠ 未登录：令牌仍在，不能踢去登录页。
+   * 展示可重试的错误页；401 场景 client 已清令牌，bootError 不会置位。
+   */
+  if (bootError) {
+    return (
+      <div className="grid min-h-dvh place-items-center px-4">
+        <EmptyState
+          title="会话恢复失败"
+          description="启动时无法连接服务器或服务暂不可用。令牌仍然有效，可稍后重试。"
+          action={
+            <Button variant="primary" onClick={retryBoot}>
+              重试
+            </Button>
+          }
+        />
       </div>
     )
   }

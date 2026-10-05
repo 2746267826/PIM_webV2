@@ -233,6 +233,19 @@ export function TasksPage() {
                 <Skeleton key={i} className="h-12" />
               ))}
             </div>
+          ) : tasksQuery.isError ? (
+            /* 查询失败必须与「空结果」区分：空态会误导用户以为没有任务 */
+            <Card>
+              <EmptyState
+                title="任务加载失败"
+                description={tasksQuery.error instanceof Error ? tasksQuery.error.message : '网络异常或服务暂不可用'}
+                action={
+                  <Button variant="primary" size="sm" onClick={() => void tasksQuery.refetch()}>
+                    重试
+                  </Button>
+                }
+              />
+            </Card>
           ) : tasks.length === 0 ? (
             <Card>
               <EmptyState
