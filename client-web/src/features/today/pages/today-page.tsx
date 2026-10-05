@@ -265,10 +265,10 @@ function TodaySectionHost({ section, date }: { section: TodaySectionRef; date: s
   const items = useMemo(() => extractItems(section.id, data?.data), [section.id, data])
   const error = data?.error?.message ?? null
 
-  /* 条目点击：跳到该分区对应的详情页（具体对象级编辑由各页自行处理） */
+  /* 条目点击：跳到该分区对应的详情页（具体对象级编辑由各页自行处理）；路由转场 */
   const onItemClick = () => {
     const to = SECTION_HINT[section.id]?.to ?? SECTION_HINT[section.kind]?.to
-    if (to) navigate(to)
+    if (to) navigate(to, { viewTransition: true })
   }
 
   return (

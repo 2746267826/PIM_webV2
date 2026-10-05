@@ -3,6 +3,7 @@ import { Plus, Repeat } from 'lucide-react'
 import { useCreateHabit, useHabits } from '../queries'
 import { notifySuccess } from '@/lib/notify'
 import { CADENCE_LABEL } from '@/lib/enums'
+import { Stagger, StaggerItem } from '@/components/motion/primitives'
 import { Button, Card, CardTitle, EmptyState, Input, Label, PageHeader, Segmented, Select, StatusBadge } from '@/components/ui'
 
 type Tab = 'active' | 'planned' | 'archived'
@@ -74,22 +75,26 @@ export function HabitsPage() {
               <EmptyState icon={Repeat} title="暂无习惯规则" description="左侧创建第一条习惯。" />
             </Card>
           ) : (
-            filtered.map((h) => (
-              <Card key={h.id} className="flex items-center gap-3 p-4">
-                <span className="grid size-9 shrink-0 place-items-center rounded-ctl bg-primary-soft text-primary">
-                  <Repeat className="size-4" aria-hidden />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-text-1">{h.title}</div>
-                  <div className="text-xs text-text-3">
-                    {CADENCE_LABEL[h.cadence] ?? h.cadence} · 来源 {h.source}
-                  </div>
-                </div>
-                <StatusBadge tone={h.status === 'Active' ? 'ok' : 'neutral'} dot={false}>
-                  {h.status === 'Active' ? '执行中' : h.status}
-                </StatusBadge>
-              </Card>
-            ))
+            <Stagger className="space-y-3">
+              {filtered.map((h, i) => (
+                <StaggerItem key={h.id} index={i}>
+                  <Card className="flex items-center gap-3 p-4">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-ctl bg-primary-soft text-primary">
+                      <Repeat className="size-4" aria-hidden />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-text-1">{h.title}</div>
+                      <div className="text-xs text-text-3">
+                        {CADENCE_LABEL[h.cadence] ?? h.cadence} · 来源 {h.source}
+                      </div>
+                    </div>
+                    <StatusBadge tone={h.status === 'Active' ? 'ok' : 'neutral'} dot={false}>
+                      {h.status === 'Active' ? '执行中' : h.status}
+                    </StatusBadge>
+                  </Card>
+                </StaggerItem>
+              ))}
+            </Stagger>
           )}
           <Card className="p-4">
             <CardTitle className="text-[13px]">完成历史</CardTitle>

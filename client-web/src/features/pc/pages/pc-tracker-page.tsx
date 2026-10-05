@@ -4,6 +4,7 @@ import { EChartsBox, asTooltipItem, chartTooltip, isTooltipList } from '@/compon
 import { MouseHeatmap } from '@/components/viz/mouse-heatmap'
 import { GitHubHeatmap, HEAT_RAMP_BLUE, HEAT_RAMP_ORANGE } from '@/components/viz/github-heatmap'
 import { KeyboardMatrix } from '@/components/viz/keyboard-matrix'
+import { CountUp } from '@/components/motion/primitives'
 import { CategoryTimeline } from '../components/category-timeline'
 import {
   useActivityAnalysis,
@@ -298,8 +299,8 @@ export function PcTrackerPage() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <SummaryTile label="记录时长" value={m?.totalRecordedDuration ?? '—'} />
           <SummaryTile label="活跃时长" value={fmtHm(activeMinutesTotal)} title="按 summary.heatmap 口径：包含仅有键盘输入、没有窗口事件的分钟，故可能高于记录时长" />
-          <SummaryTile label="按键总数" value={(ks?.keyPresses ?? 0).toLocaleString()} />
-          <SummaryTile label="点击总数" value={(ks?.totalClicks ?? 0).toLocaleString()} />
+          <SummaryTile label="按键总数" value={(ks?.keyPresses ?? 0).toLocaleString()} countValue={ks?.keyPresses} />
+          <SummaryTile label="点击总数" value={(ks?.totalClicks ?? 0).toLocaleString()} countValue={ks?.totalClicks} />
           <SummaryTile label="待处理建议" value={String(suggestions.filter((s) => s.status === 'pending').length)} warn={suggestions.some((s) => s.status === 'pending')} />
         </div>
       ))}
@@ -542,11 +543,26 @@ export function PcTrackerPage() {
   )
 }
 
-function SummaryTile({ label, value, warn, title }: { label: string; value: string; warn?: boolean; title?: string }) {
+function SummaryTile({
+  label,
+  value,
+  warn,
+  title,
+  countValue,
+}: {
+  label: string
+  value: string
+  warn?: boolean
+  title?: string
+  /** 纯数值时启用数字滚动（首次到位/数据刷新时缓动） */
+  countValue?: number
+}) {
   return (
     <div className={cn('rounded-card border p-4', warn ? 'border-warn-border bg-warn-soft' : 'border-border bg-bg shadow-card')} title={title}>
       <div className="text-xs text-text-3">{label}</div>
-      <div className="tnum mt-1 text-xl font-semibold text-text-1">{value}</div>
+      <div className="tnum mt-1 text-xl font-semibold text-text-1">
+        {countValue != null ? <CountUp value={countValue} /> : value}
+      </div>
     </div>
   )
 }

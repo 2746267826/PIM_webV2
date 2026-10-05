@@ -141,6 +141,52 @@ body {
   animation: pim-slide-out-left 180ms ease-in both;
 }
 
+/* ── 路由级 View Transitions（React Router <Link viewTransition>）────
+   主内容区独立命名：旧页轻微上移淡出、新页淡入（transform/opacity only）。
+   侧边栏与页脚不参与（无 view-transition-name），保持静止锚点。 */
+main {
+  view-transition-name: main-content;
+}
+::view-transition-old(main-content) {
+  animation: 140ms ease-in both pim-vt-out;
+}
+::view-transition-new(main-content) {
+  animation: 180ms ease-out both pim-vt-in;
+}
+@keyframes pim-vt-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes pim-vt-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* 根级默认交叉淡化保留，但压缩时长避免与新内容动画叠加发闷 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 120ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root),
+  ::view-transition-old(main-content),
+  ::view-transition-new(main-content) {
+    animation: none !important;
+  }
+}
+
 /* 动效兜底：系统要求减少动效时全部禁用 */
 @media (prefers-reduced-motion: reduce) {
   *,
