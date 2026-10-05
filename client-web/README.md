@@ -16,13 +16,21 @@ npm run test         # vitest 单测
 npm run build        # tsc + vite build → dist/
 ```
 
-### 后端地址
+### 后端地址与测试账号
 
-开发服务器默认将 `/api` 代理到 **https://pim.example.com:15860**（测试 API）。可用环境变量覆盖：
+服务器地址与测试账号不写在源码里，统一放在 `client-web/.env`（已 gitignore）。首次使用先复制模板：
 
 ```bash
-PIM_API_TARGET=http://localhost:5858 npm run dev   # 指向本机后端
+cp .env.example .env    # 然后填入 PIM_API_TARGET / PIM_TEST_USER / PIM_TEST_PASS
 ```
+
+开发服务器把 `/api` 代理到 `.env` 中的 `PIM_API_TARGET`；命令行传入的同名环境变量优先，未配置时回落到 `http://localhost:5858`：
+
+```bash
+PIM_API_TARGET=http://localhost:5858 npm run dev   # 临时指向本机后端
+```
+
+`scripts/` 下的自验与 QA 脚本（`verify-*.mjs`、`qa-*.mjs`）同样从 `.env` 取地址和账号，缺失时会直接报错提示。
 
 也可在应用内「设置 → 服务器」直接填写 API 地址（不依赖代理；跨域需后端 CORS 白名单放行该来源）。
 

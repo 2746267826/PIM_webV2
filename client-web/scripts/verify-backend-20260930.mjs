@@ -1,11 +1,14 @@
 /* 后端《PC记录接口变更与修复说明_20260930.md》§5 自验脚本（node 直跑，无依赖） */
-const BASE = 'https://pim.example.com:15860'
+import { apiBase, testCredentials } from './env.mjs'
+
+const BASE = apiBase()
+const { username, password } = testCredentials()
 
 async function login() {
   const res = await fetch(`${BASE}/api/v1/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'a', password: 'PLACEHOLDER_PASSWORD' }),
+    body: JSON.stringify({ username, password }),
   })
   const json = await res.json()
   if (!json.data?.accessToken) throw new Error(`login failed: ${JSON.stringify(json).slice(0, 200)}`)

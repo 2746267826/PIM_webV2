@@ -9,7 +9,10 @@
  *
  * 运行：node scripts/verify-pitfalls.mjs
  */
-const BASE = 'https://pim.example.com:15860'
+import { apiBase, testCredentials } from './env.mjs'
+
+const BASE = apiBase()
+const { username, password } = testCredentials()
 const results = []
 const ok = (name, cond, detail) => {
   results.push({ name, pass: !!cond, detail })
@@ -20,7 +23,7 @@ async function login() {
   const r = await fetch(`${BASE}/api/v1/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'a', password: 'PLACEHOLDER_PASSWORD' }),
+    body: JSON.stringify({ username, password }),
   })
   const j = await r.json()
   return j.data

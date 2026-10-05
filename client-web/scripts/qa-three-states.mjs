@@ -8,8 +8,10 @@
  */
 import { chromium } from 'playwright'
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { testCredentials } from './env.mjs'
 
 const BASE = 'http://127.0.0.1:3000'
+const { username, password } = testCredentials()
 const OUT = 'docs/qa/screenshots'
 mkdirSync(OUT, { recursive: true })
 
@@ -30,8 +32,8 @@ const page = await context.newPage()
 
 /* 登录复用 */
 await page.goto(`${BASE}/login`)
-await page.getByLabel('用户名或邮箱').fill('a')
-await page.getByLabel('密码').fill('PLACEHOLDER_PASSWORD')
+await page.getByLabel('用户名或邮箱').fill(username)
+await page.getByLabel('密码').fill(password)
 await page.getByRole('button', { name: '登录' }).click()
 await page.waitForURL('**/today', { timeout: 15000 })
 

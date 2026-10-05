@@ -16,7 +16,7 @@
 > 两处推测被实测推翻：PC-1 真因是聚合分页截断（输入数据全天都在），PC-5 输入数据同样全天都在。
 > 回归验证脚本：`client-web/scripts/verify-backend-20260930.mjs`（12 项全 PASS）。
 
-> 依据：测试 API `https://pim.example.com:15860`（版本 2026.09.740）实测数据，
+> 依据：测试 API（地址见 `client-web/.env` 的 `PIM_API_TARGET`，版本 2026.09.740）实测数据，
 > 复现命令均为 curl 可直接执行。业务日口径：Asia/Shanghai，04:00 起算。
 > 整理日期：2026-09-29。前端已对 PC-1/PC-2/PC-3/PC-4 做了规避，但根因在后端。
 

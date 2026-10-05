@@ -1,12 +1,18 @@
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
+// 本地 .env 提供 PIM_API_TARGET / PIM_DEV_PORT（已 gitignore；模板见 .env.example）。
+// loadEnvFile 不覆盖已有的 shell 环境变量，故命令行显式传入的值始终优先。
+const envPath = path.resolve(__dirname, '.env')
+if (existsSync(envPath)) process.loadEnvFile(envPath)
+
 // 开发环境将 /api 代理到 PIM API。
-// 默认走测试 API（pim.example.com:15860）；本地起后端时改回 http://localhost:5858。
+// 目标地址来自 PIM_API_TARGET；未设置时回落到本机后端。
 // 也可不依赖代理：在应用内「设置 → 服务器」填写 API 地址（跨域需后端 CORS 白名单放行）。
-const API_TARGET = process.env.PIM_API_TARGET ?? 'https://pim.example.com:15860'
+const API_TARGET = process.env.PIM_API_TARGET ?? 'http://localhost:5858'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
