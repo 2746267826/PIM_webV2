@@ -35,7 +35,26 @@ let seq = 0
 const pending = new Map<string, PendingResolver>()
 
 function bridge(): PimAndroidBridge | null {
-  return (globalThis as { pimAndroid?: PimAndroidBridge }).pimAndroid ?? null
+  const direct = (globalThis as { pimAndroid?: PimAndroidBridge }).pimAndroid
+  if (direct) return direct
+  /*
+   * Capacitor 壳（测试壳）：原生注册了 PimBridge 参考插件，但没有直接注入
+   * window.pimAndroid——在这里按同一契约合成桥（postMessage 单向发送，
+   * 响应由原生 evaluateJavascript 回送 __pimBridgeReceive）。真实采集端 App
+   * 自己注入原生实现，此合成逻辑不生效。
+   */
+  const cap = (globalThis as { Capacitor?: { Plugins?: Record<string, { handleMessage?: (o: { raw: string }) => unknown }> | undefined } }).Capacitor
+  const handleMessage = cap?.Plugins?.PimBridge?.handleMessage
+  if (typeof handleMessage === 'function') {
+    const synthetic: PimAndroidBridge = {
+      postMessage: (raw: string) => {
+        void handleMessage({ raw })
+      },
+    }
+    ;(globalThis as { pimAndroid?: PimAndroidBridge }).pimAndroid = synthetic
+    return synthetic
+  }
+  return null
 }
 
 /** 是否运行于 Android 壳内（桥可用） */

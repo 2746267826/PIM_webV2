@@ -14,6 +14,9 @@ const config: CapacitorConfig = {
   server: {
     // 允许壳内访问局域网 API（/setup 中配置的任意地址）
     cleartext: true,
+    // 桥全链路验证时可临时指向远端内嵌页（验证已完成）：
+    //   url: 'https://pim.example.com:15860/embed/android/today', allowNavigation: ['*']
+    // 默认本地 dist + /setup 引导（远程加载架构：登录后 apiFetch 走配置的服务器）。
   },
 }
 

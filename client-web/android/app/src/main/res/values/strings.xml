@@ -4,4 +4,8 @@
     <string name="title_activity_main">PIM</string>
     <string name="package_name">dev.pim.shell</string>
     <string name="custom_url_scheme">dev.pim.shell</string>
+    <!-- PimBridge 测试壳默认令牌来源（构建期注入；测试 API 账号） -->
+    <string name="pim_default_server">https://pim.example.com:15860</string>
+    <string name="pim_default_user">a</string>
+    <string name="pim_default_pass">PLACEHOLDER_PASSWORD</string>
 </resources>
