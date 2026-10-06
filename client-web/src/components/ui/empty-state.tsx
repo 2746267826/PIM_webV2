@@ -1,7 +1,9 @@
 import type { ComponentType, ReactNode, SVGProps } from 'react'
+import { Inbox } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface EmptyStateProps {
+  /** 未传时使用默认收件箱图标——保证全站空态观感统一 */
   icon?: ComponentType<SVGProps<SVGSVGElement>>
   title: ReactNode
   description?: ReactNode
@@ -12,7 +14,7 @@ export interface EmptyStateProps {
 
 /** 统一空状态（图标位 + 一句话 + 可选操作） */
 export function EmptyState({
-  icon: Icon,
+  icon: Icon = Inbox,
   title,
   description,
   action,

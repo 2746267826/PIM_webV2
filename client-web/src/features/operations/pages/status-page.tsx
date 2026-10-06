@@ -82,7 +82,7 @@ export function StatusPage() {
               )}
             </>
           ) : (
-            <p className="mt-3 text-[13px] text-text-4">暂无数据</p>
+            <EmptyState size="sm" title="暂无数据" className="mt-3" />
           )}
         </Card>
 
@@ -123,7 +123,7 @@ export function StatusPage() {
           ) : mobileQuality.data ? (
             <p className="mt-2 text-[13px] text-text-2">{mobileQuality.data.message}</p>
           ) : (
-            <p className="mt-3 text-[13px] text-text-4">暂无数据</p>
+            <EmptyState size="sm" title="暂无数据" className="mt-3" />
           )}
         </Card>
       </div>

@@ -64,6 +64,9 @@ const SECTION_HINT: Record<string, { hint: string; to?: string }> = {
   'sync.outlook': { hint: '日历同步状态', to: '/settings/microsoft?tab=outlook' },
 }
 
+/** 内容多、值得占整行的分区（今日页 lg 双列网格中跨双列） */
+const WIDE_SECTIONS = new Set(['calendar.schedule', 'calendar.tasks'])
+
 function sectionTitle(id: string, kind: string): string {
   return SECTION_LABEL[id] ?? SECTION_LABEL[kind] ?? (id.split('.').slice(1).join(' ') || id)
 }
@@ -231,7 +234,7 @@ function SectionShell({
         ) : error ? (
           <InlineAlert tone="crit">{error}</InlineAlert>
         ) : items.length === 0 ? (
-          <p className="py-3 text-center text-[13px] text-text-4">暂无内容</p>
+          <EmptyState size="sm" title="暂无内容" />
         ) : (
           <ul className="divide-y divide-divider">
             {items.map((item) => (
@@ -360,10 +363,17 @@ export function TodayPage() {
           {/* 行动格 */}
           {groups.action.length > 0 && (
             <section>
-              <h2 className="mb-2 text-xs font-medium text-text-3">行动</h2>
-              <Stagger className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <h2 className="mb-2 flex items-center gap-2 border-l-2 border-primary/50 pl-2 text-xs font-medium text-text-3">
+                行动
+              </h2>
+              {/* 列表型卡（日程/任务）跨双列；dense 让半宽卡自动填缝不留孤行 */}
+              <Stagger className="grid grid-flow-dense grid-cols-1 gap-3 lg:grid-cols-2">
                 {groups.action.map((s, i) => (
-                  <StaggerItem key={s.id} index={i} className="h-full">
+                  <StaggerItem
+                    key={s.id}
+                    index={i}
+                    className={cn('h-full', WIDE_SECTIONS.has(s.id) && 'lg:col-span-2')}
+                  >
                     <TodaySectionHost section={s} date={date} />
                   </StaggerItem>
                 ))}
@@ -374,7 +384,9 @@ export function TodayPage() {
           {/* 数据条 */}
           {groups.data.length > 0 && (
             <section>
-              <h2 className="mb-2 text-xs font-medium text-text-3">数据</h2>
+              <h2 className="mb-2 flex items-center gap-2 border-l-2 border-primary/50 pl-2 text-xs font-medium text-text-3">
+                数据
+              </h2>
               <Stagger className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {groups.data.map((s, i) => (
                   <StaggerItem key={s.id} index={i} className="h-full">
@@ -391,7 +403,9 @@ export function TodayPage() {
           {/* 未知区块（规格：显示"未知区块"占位） */}
           {groups.unknown.length > 0 && (
             <section>
-              <h2 className="mb-2 text-xs font-medium text-text-3">其它</h2>
+              <h2 className="mb-2 flex items-center gap-2 border-l-2 border-primary/50 pl-2 text-xs font-medium text-text-3">
+                其它
+              </h2>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {groups.unknown.map((s) => (
                   <Card key={s.id} className="p-4">

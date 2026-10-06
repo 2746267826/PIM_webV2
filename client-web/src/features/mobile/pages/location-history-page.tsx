@@ -310,7 +310,7 @@ function RawPointsTable({ segmentId, days }: { segmentId: string; days: RangeDay
         {loading ? (
           <Skeleton className="h-32" />
         ) : points.length === 0 ? (
-          <p className="py-4 text-center text-[13px] text-text-4">该段没有原始点</p>
+          <EmptyState size="sm" title="该段没有原始点" />
         ) : (
           <table className="w-full text-xs">
             <thead>

@@ -5,7 +5,7 @@ import { apiGet, apiPost } from '@/api/client'
 import { deferredIntervalMs } from '@/lib/polling'
 import { formatTime } from '@/lib/datetime'
 import { notifyError, notifySuccess } from '@/lib/notify'
-import { Button, Card, CardTitle, Input, Label, PageHeader, Segmented, Skeleton, StatusBadge } from '@/components/ui'
+import { Button, Card, CardTitle, EmptyState, Input, Label, PageHeader, Segmented, Skeleton, StatusBadge } from '@/components/ui'
 import { cn } from '@/lib/utils'
 
 interface EndpointStatus {
@@ -64,7 +64,7 @@ export function EndpointShellPage() {
             {endpoints.isLoading ? (
               <Skeleton className="h-32" />
             ) : (endpoints.data?.length ?? 0) === 0 ? (
-              <p className="py-6 text-center text-[13px] text-text-4">没有已注册的端点</p>
+              <EmptyState size="sm" title="没有已注册的端点" />
             ) : (
               endpoints.data!.map((e) => (
                 <button

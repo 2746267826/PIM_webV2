@@ -64,7 +64,14 @@ function Track({
   return (
     <div className="flex items-center gap-3">
       <span className="w-12 shrink-0 text-right text-[11px] text-text-4">{label}</span>
-      <div className="relative h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-2">
+      <div
+        className="relative h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-2"
+        style={
+          segs.length === 0
+            ? { backgroundImage: 'repeating-linear-gradient(45deg, transparent 0 6px, rgb(148 163 184 / 0.18) 6px 12px)' }
+            : undefined
+        }
+      >
         {segs.map((seg) => (
           <button
             key={seg.key}
@@ -162,6 +169,11 @@ export function TodayPulse({ date }: { date: string }) {
             </>
           ) : (
             tracks.map((t) => <Track key={t.label} label={t.label} segs={t.segs} onJump={jump} />)
+          )}
+          {!loading && tracks.every((t) => t.segs.length === 0) && (
+            <p className="pt-0.5 text-center text-[11px] text-text-4">
+              区间内暂无日程 / 任务段 / 习惯投射
+            </p>
           )}
         </div>
         <div className="mt-2 flex items-center justify-between text-[10px] text-text-4">

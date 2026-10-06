@@ -195,7 +195,7 @@ export function ReportsPage() {
                         </div>
                       ))
                     ) : (
-                      <p className="py-3 text-center text-[13px] text-text-4">无指标数据</p>
+                      <EmptyState size="sm" title="无指标数据" />
                     )}
                   </div>
                 </Card>

@@ -10,7 +10,7 @@ import type { OutlookSyncBatch } from '@/features/calendar/types'
 import { formatTime } from '@/lib/datetime'
 import { notifyError, notifySuccess } from '@/lib/notify'
 import { DeviceCodeFlow } from './device-code-flow'
-import { Button, Card, CardTitle, Chip, Dialog, DialogBody, DialogContent, DialogHeader, Input, Label, PageHeader, Segmented, Skeleton, StatusBadge } from '@/components/ui'
+import { Button, Card, CardTitle, Chip, Dialog, DialogBody, DialogContent, DialogHeader, EmptyState, Input, Label, PageHeader, Segmented, Skeleton, StatusBadge } from '@/components/ui'
 import { cn } from '@/lib/utils'
 
 type Tab = 'outlook' | 'onedrive'
@@ -355,7 +355,7 @@ function OutlookTab({ onChanged }: { onChanged: () => void }) {
           {batches.isLoading ? (
             Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-16" />)
           ) : (batches.data?.items.length ?? 0) === 0 ? (
-            <p className="py-6 text-center text-[13px] text-text-4">还没有同步批次</p>
+            <EmptyState size="sm" title="还没有同步批次" />
           ) : (
             batches.data!.items.map((b) => (
               <div key={b.id} className="rounded-card border border-border px-3 py-2.5">

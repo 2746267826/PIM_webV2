@@ -211,7 +211,7 @@ export function WorkbenchPage() {
                 <StatusBadge tone={pending.length > 0 ? 'warn' : 'ok'} className="ml-auto">{pending.length}</StatusBadge>
               </div>
               {pending.length === 0 ? (
-                <p className="py-4 text-center text-[13px] text-text-4">没有待确认的操作</p>
+                <EmptyState size="sm" title="没有待确认的操作" />
               ) : (
                 <ul className="mt-2 space-y-1.5">
                   {pending.slice(0, 3).map((c: { id: string; summary: string }) => (
@@ -238,7 +238,7 @@ export function WorkbenchPage() {
             </div>
             <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
               {todos.length === 0 ? (
-                <p className="py-6 text-center text-[13px] text-text-4">没有未完成的任务</p>
+                <EmptyState size="sm" title="没有未完成的任务" />
               ) : (
                 <ul className="divide-y divide-divider">
                   {todos.map((t) => (

@@ -352,7 +352,7 @@ function TimelineDetailDialog({
             </tbody>
           </table>
           {model.records.length === 0 && (
-            <p className="py-8 text-center text-[13px] text-text-4">当日没有可用记录</p>
+            <EmptyState size="sm" title="当日没有可用记录" />
           )}
         </DialogBody>
       </DialogContent>

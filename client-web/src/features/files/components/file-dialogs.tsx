@@ -3,7 +3,7 @@ import { Link2, Trash2 } from 'lucide-react'
 import { filesApi } from '../api'
 import { useFileMutations } from '../queries'
 import type { FileItem, FileShare } from '../types'
-import { Button, ConfirmDialog, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, Input, Label, Segmented, Select, Skeleton, StatusBadge } from '@/components/ui'
+import { Button, ConfirmDialog, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, EmptyState, Input, Label, Segmented, Select, Skeleton, StatusBadge } from '@/components/ui'
 import { notifyError, notifySuccess } from '@/lib/notify'
 import { formatBytes } from '../upload-chunk-plan'
 
@@ -237,7 +237,7 @@ export function ShareDialog({ item, onClose }: { item: FileItem; onClose: () => 
             {shares == null ? (
               <Skeleton className="h-12" />
             ) : shares.length === 0 ? (
-              <p className="text-[13px] text-text-4">暂无分享链接</p>
+              <EmptyState size="sm" title="暂无分享链接" />
             ) : (
               shares.map((s) => (
                 <div key={s.permissionId ?? s.webUrl} className="flex items-center gap-2 rounded-ctl border border-border px-2.5 py-2 text-[13px]">

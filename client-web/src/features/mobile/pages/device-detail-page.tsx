@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { mobileApi } from '../api'
 
 import { formatTime } from '@/lib/datetime'
-import { Card, CardTitle, PageHeader, Skeleton, StatusBadge } from '@/components/ui'
+import { Card, CardTitle, EmptyState, PageHeader, Skeleton, StatusBadge } from '@/components/ui'
 
 /** 设备详情（02 §devices/:deviceId：只读页） */
 export function DeviceDetailPage() {
@@ -88,7 +88,7 @@ export function DeviceDetailPage() {
             <CardTitle>同步历史（最近 10 批）</CardTitle>
             <div className="mt-2 divide-y divide-divider">
               {data.syncHistory.length === 0 ? (
-                <p className="py-3 text-center text-[13px] text-text-4">暂无同步批次</p>
+                <EmptyState size="sm" title="暂无同步批次" />
               ) : (
                 (data.syncHistory ?? []).map((b: { batchId: string; createdAt: string; acceptedCount: number; status: string }) => (
                   <div key={b.batchId} className="flex items-center gap-3 py-2 text-[13px]">

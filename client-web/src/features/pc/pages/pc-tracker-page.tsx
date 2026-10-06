@@ -313,7 +313,7 @@ export function PcTrackerPage() {
             <CardTitle>专注块</CardTitle>
             <div className="mt-2 space-y-1.5">
               {(focusBlocks.data?.items?.length ?? 0) === 0 ? (
-                <p className="py-3 text-center text-[13px] text-text-4">当日暂无连续专注时段</p>
+                <EmptyState size="sm" title="当日暂无连续专注时段" />
               ) : (
                 focusBlocks.data!.items.slice(0, 6).map((b) => (
                   <div key={b.startUtc} className="flex items-center gap-3 text-[13px]">
@@ -337,7 +337,7 @@ export function PcTrackerPage() {
             </div>
             <div className="mt-3 space-y-1.5">
               {hourlyRows.length === 0 ? (
-                <p className="py-4 text-center text-[13px] text-text-4">暂无数据</p>
+                <EmptyState size="sm" title="暂无数据" />
               ) : (
                 (showAllHours ? hourlyRows : hourlyRows.filter((r) => r.activeMinutes > 0)).map((row) => {
                   const color = INTENSITY_RAMP[Math.min(5, Math.max(1, row.intensity))]
@@ -365,7 +365,7 @@ export function PcTrackerPage() {
                         </div>
                       </div>
                       {row.pending > 0 && (
-                        <StatusBadge tone="warn" dot={false} className="shrink-0">{row.pending} 待分类</StatusBadge>
+                        <StatusBadge size="xs" tone="warn" dot={false} className="shrink-0">{row.pending} 待分类</StatusBadge>
                       )}
                     </div>
                   )
@@ -432,7 +432,7 @@ export function PcTrackerPage() {
               </div>
               <div className="mt-3">
                 {(lateNight.data?.items?.length ?? 0) === 0 ? (
-                  <p className="py-4 text-center text-[13px] text-text-4">暂无数据</p>
+                  <EmptyState size="sm" title="暂无数据" />
                 ) : (
                   <GitHubHeatmap
                     days={(lateNight.data?.items ?? []).map((d) => ({ date: d.date, value: d.minutes }))}

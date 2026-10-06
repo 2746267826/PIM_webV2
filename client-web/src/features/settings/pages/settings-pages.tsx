@@ -116,7 +116,10 @@ export function DataReliabilityPage() {
         <div className="space-y-4">
           {groups.map(([groupLabel, rules]) => (
             <Card key={groupLabel} className="p-4">
-              <CardTitle>{groupLabel}</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <span className="h-3.5 w-[3px] shrink-0 rounded-full bg-primary" aria-hidden />
+                {groupLabel}
+              </CardTitle>
               <div className="mt-2 divide-y divide-divider">
                 {rules.map((r) => (
                   <button
@@ -125,7 +128,7 @@ export function DataReliabilityPage() {
                     onClick={() => setDetailRule(r)}
                     className="flex w-full items-center gap-3 py-2 text-left outline-none hover:bg-surface"
                   >
-                    <StatusBadge tone={r.status === 'Red' || r.status === 'red' ? 'crit' : r.status === 'Yellow' || r.status === 'yellow' ? 'warn' : 'ok'} dot={false}>
+                    <StatusBadge size="xs" tone={r.status === 'Red' || r.status === 'red' ? 'crit' : r.status === 'Yellow' || r.status === 'yellow' ? 'warn' : 'ok'} dot={false}>
                       {r.statusLabel || r.status}
                     </StatusBadge>
                     <span className="min-w-0 flex-1 truncate text-[13px] text-text-1">{r.name}</span>

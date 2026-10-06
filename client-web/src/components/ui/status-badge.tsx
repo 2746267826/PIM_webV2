@@ -22,26 +22,31 @@ const toneSoft: Record<Tone, string> = {
 export interface StatusBadgeProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: Tone
   dot?: boolean
+  /** sm（默认 22px）｜xs（18px：表格行/紧凑列表行用，避免撑高行距） */
+  size?: 'sm' | 'xs'
 }
 
 /** 状态徽标（语义短标签：健康/告警/离线/同步中等） */
 export function StatusBadge({
   tone = 'neutral',
   dot = true,
+  size = 'sm',
   className,
   children,
   ...props
 }: StatusBadgeProps) {
+  const xs = size === 'xs'
   return (
     <span
       className={cn(
-        'inline-flex h-[22px] items-center gap-1.5 rounded-badge border px-2 text-xs font-medium whitespace-nowrap',
+        'inline-flex items-center rounded-badge border font-medium whitespace-nowrap',
+        xs ? 'h-[18px] gap-1 px-1.5 text-[10px]' : 'h-[22px] gap-1.5 px-2 text-xs',
         toneSoft[tone],
         className,
       )}
       {...props}
     >
-      {dot && <span className={cn('size-1.5 shrink-0 rounded-full', toneDot[tone])} aria-hidden />}
+      {dot && <span className={cn('shrink-0 rounded-full', xs ? 'size-1' : 'size-1.5', toneDot[tone])} aria-hidden />}
       {children}
     </span>
   )

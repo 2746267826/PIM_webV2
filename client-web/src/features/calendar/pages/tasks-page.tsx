@@ -329,8 +329,8 @@ export function TasksPage() {
                         </span>
                       </button>
                       <div className="flex shrink-0 items-center gap-1.5">
-                        {badge && <StatusBadge tone={badge.tone} dot={false}>{badge.label}</StatusBadge>}
-                        {done && <StatusBadge tone="ok" dot={false}>已完成</StatusBadge>}
+                        {badge && <StatusBadge size="xs" tone={badge.tone} dot={false}>{badge.label}</StatusBadge>}
+                        {done && <StatusBadge size="xs" tone="ok" dot={false}>已完成</StatusBadge>}
                         <button
                           type="button"
                           aria-label={`执行时间段：${task.title}`}
