@@ -268,7 +268,7 @@ function UsageView({
               {c.points.length === 0 ? (
                 <EmptyState size="sm" title="暂无数据" />
               ) : (
-                <EChartsBox option={option} height={200} />
+                <EChartsBox option={option} height={c.chartType === 'hour-distribution' ? 420 : 200} />
               )}
             </div>
           </Card>
@@ -497,8 +497,9 @@ function chartToOption(c: { chartType: string; unit?: string; points: { label: s
       series: [{ type: 'line', smooth: true, symbolSize: 5, itemStyle: { color: '#2563EB' }, areaStyle: { color: 'rgba(37,99,235,.08)' }, data: c.points.map((p) => Math.round(p.value * 100) / 100) }],
     }
   }
-  // bar 类（top-apps / hour-distribution 等）
-  const items = c.points.slice(0, 10).slice().reverse()
+  // bar 类：top-apps 取前 10；hour-distribution 是 24 小时全量，不能截断（此前被 slice(0,10) 截成 00:00–09:00）
+  const isHourDistribution = c.chartType === 'hour-distribution'
+  const items = (c.chartType === 'top-apps' ? c.points.slice(0, 10) : c.points).slice().reverse()
   return {
     tooltip: chartTooltip({
       trigger: 'axis',
@@ -511,8 +512,12 @@ function chartToOption(c: { chartType: string; unit?: string; points: { label: s
     }),
     grid: { left: 96, right: 24, top: 6, bottom: 20 },
     xAxis: { type: 'value', axisLabel: { fontSize: 10, color: '#94A3B8' } },
-    yAxis: { type: 'category', data: items.map((p) => p.label), axisLabel: { fontSize: 11, color: '#64748B' } },
-    series: [{ type: 'bar', barWidth: 12, itemStyle: { color: '#3B82F6', borderRadius: [0, 3, 3, 0] }, data: items.map((p) => Math.round(p.value * 100) / 100) }],
+    yAxis: {
+      type: 'category',
+      data: items.map((p) => p.label),
+      axisLabel: { fontSize: 10, color: '#64748B', interval: isHourDistribution ? 0 : 'auto' },
+    },
+    series: [{ type: 'bar', barWidth: isHourDistribution ? 7 : 12, itemStyle: { color: '#3B82F6', borderRadius: [0, 3, 3, 0] }, data: items.map((p) => Math.round(p.value * 100) / 100) }],
   }
 }
 
