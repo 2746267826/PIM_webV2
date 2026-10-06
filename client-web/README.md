@@ -58,9 +58,14 @@ cd android && JAVA_HOME="C:\Program Files\Android\Android Studio\jbr" \
 
 壳内首次启动会进入 `/setup` 填写 API 地址（`lib/apiBase.ts`，存 `pim.apiBase`）。
 
-### Windows 壳（Tauri）
+### Windows 壳（Tauri 2，已交付）
 
-依赖 Rust 工具链（本机未装 cargo，P5 阶段接入）：`npm run build && npx tauri build`。
+`src-tauri/` 为严格远程加载壳：安装包只含 `shell-dist/` 引导页（记忆服务器地址 → 倒计时自动进入），React 应用不进安装包（更新只发服务端）。产物 `PIM_<版本>_x64-setup.exe`（~1.8MiB）。
+
+```bash
+npx tauri build   # 需 Rust stable-msvc + MSVC Build Tools；国内网络建议 ~/.cargo/config.toml 配 rsproxy 镜像
+npx tauri dev     # 开发调试（加载 Vite dev server）
+```
 
 ## 目录
 
