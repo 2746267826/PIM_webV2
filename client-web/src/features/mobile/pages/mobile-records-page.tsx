@@ -13,7 +13,7 @@ import { mobileApi } from '../api'
 import { todayBusinessDay, businessDayShift, businessDayRange } from '@/lib/businessDay'
 import { LIFE_CATEGORY_COLOR } from '@/lib/enums'
 import { formatDuration, formatTime } from '@/lib/datetime'
-import { EChartsBox, asTooltipItem, chartTooltip, resolveCssColors } from '@/components/viz/echarts-box'
+import { EChartsBox, asTooltipItem, chartTooltip, isTooltipList, resolveCssColors } from '@/components/viz/echarts-box'
 import { GitHubHeatmap, HEAT_RAMP_GREEN } from '@/components/viz/github-heatmap'
 import { Button, Card, CardTitle, Chip, EmptyState, Input, MetricCard, PageHeader, Segmented, Skeleton, StatusBadge } from '@/components/ui'
 import { cn } from '@/lib/utils'
@@ -196,9 +196,19 @@ function UsageView({
       .sort((a, b) => a.date.localeCompare(b.date))
   }, [heatmap.data])
 
-  /* 图表网格（服务端 8 张预设，按 chartType 分发） */
+  /*
+   * 图表网格（服务端 8 张预设，按 chartType 分发）。
+   * 服务端时长类图表 unit 一律是 "seconds"，原始秒数上轴不可读——
+   * 统一换算为分钟（等比缩放不改变饼图角度），tooltip 再给中文时长。
+   */
   const chartCards = useMemo(() => {
-    return (charts.data ?? []).map((c) => ({ c, option: chartToOption(c) }))
+    return (charts.data ?? []).map((c0) => {
+      const toMinutes = c0.unit === 'seconds'
+      const c = toMinutes
+        ? { ...c0, unit: '分钟', points: c0.points.map((pt) => ({ ...pt, value: Math.round((pt.value / 60) * 10) / 10 })) }
+        : c0
+      return { c, option: chartToOption(c) }
+    })
   }, [charts.data])
 
   return (
@@ -404,7 +414,7 @@ function SessionEvents({ sessionId }: { sessionId: string }) {
 
 /** 服务端图表 DTO → ECharts option */
 /** 服务端预设图表 → ECharts option（统一带 tooltip） */
-function chartToOption(c: { chartType: string; unit?: string; points: { label: string; value: number; lifeCategory?: string | null }[] }) {
+function chartToOption(c: { chartType: string; unit?: string; points: { label: string; value: number; lifeCategory?: string | null; localDate?: string | null; localHour?: number | null; packageName?: string | null }[] }) {
   const unit = c.unit ?? ''
   if (c.chartType === 'pie' || c.chartType === 'category-share') {
     const hasCategories = c.points.some((p) => p.lifeCategory)
@@ -413,7 +423,7 @@ function chartToOption(c: { chartType: string; unit?: string; points: { label: s
         trigger: 'item',
         formatter: (p) => {
           const it = asTooltipItem(p)
-          return `${it.name}<br/><b>${Math.round(Number(it.value))}</b>${unit} · ${it.percent ?? 0}%`
+          return `${it.name}<br/><b>${Math.round(Number(it.value))}</b>${unit}${unit === '分钟' ? `（${formatDuration(Number(it.value) * 60)}）` : ''} · ${it.percent ?? 0}%`
         },
       }),
       legend: { bottom: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 10, color: '#64748B' } },
@@ -434,13 +444,51 @@ function chartToOption(c: { chartType: string; unit?: string; points: { label: s
       }],
     }
   }
-  if (c.chartType === 'daily-total' || c.chartType === 'category-trend' || c.chartType === 'switch-trend') {
+  if (c.chartType === 'category-trend') {
+    // 「日期 × 生活分类」点集 → 每个分类一条线、x 轴为日期的多系列趋势。
+    // 旧实现把分类名当 x 轴类别，17 个点挤在 3-4 个格子里且互相覆盖（视觉上大量 0/缺位）。
+    const withDate = c.points.filter((pt) => pt.localDate)
+    const dates = [...new Set(withDate.map((pt) => pt.localDate as string))].sort()
+    const cats = [...new Set(withDate.map((pt) => pt.lifeCategory ?? pt.label))]
+    const byCatDate = new Map<string, number>()
+    for (const pt of withDate) {
+      byCatDate.set(`${pt.lifeCategory ?? pt.label}|${pt.localDate}`, Math.round(pt.value * 100) / 100)
+    }
+    return {
+      tooltip: chartTooltip({
+        trigger: 'axis',
+        formatter: (p) => {
+          const arr = isTooltipList(p) ? p : [p]
+          const head = arr[0]?.axisValueLabel ?? ''
+          const lines = arr
+            .filter((x) => Number(x.value) > 0)
+            .map((x) => `${x.marker ?? ''}${x.seriesName}：${formatDuration(Number(x.value) * 60)}`)
+          return [head, ...lines].join('<br/>')
+        },
+      }),
+      legend: { bottom: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 10, color: '#64748B' } },
+      grid: { left: 46, right: 12, top: 10, bottom: 44 },
+      xAxis: { type: 'category', data: dates.map((d) => d.slice(5)), axisLabel: { fontSize: 10, color: '#94A3B8' } },
+      yAxis: { type: 'value', axisLabel: { fontSize: 10, color: '#94A3B8' }, name: unit, nameTextStyle: { fontSize: 9, color: '#94A3B8' } },
+      series: cats.map((cat) => ({
+        name: cat,
+        type: 'line' as const,
+        smooth: true,
+        symbolSize: 5,
+        itemStyle: { color: lifeColor(cat) },
+        emphasis: { focus: 'series' as const },
+        data: dates.map((d) => byCatDate.get(`${cat}|${d}`) ?? 0),
+      })),
+    }
+  }
+  if (c.chartType === 'daily-total' || c.chartType === 'switch-trend') {
     return {
       tooltip: chartTooltip({
         trigger: 'axis',
         formatter: (p) => {
           const it = asTooltipItem(p)
-          return `${it.axisValueLabel ?? it.name}<br/>${Math.round(Number(it.value) * 100) / 100}${unit}`
+          const v = Math.round(Number(it.value) * 100) / 100
+          return `${it.axisValueLabel ?? it.name}<br/><b>${v}</b>${unit}${unit === '分钟' ? `（${formatDuration(v * 60)}）` : ''}`
         },
       }),
       grid: { left: 46, right: 12, top: 10, bottom: 24 },
@@ -457,7 +505,8 @@ function chartToOption(c: { chartType: string; unit?: string; points: { label: s
       axisPointer: { type: 'shadow' },
       formatter: (p) => {
         const it = asTooltipItem(p)
-        return `${it.name}<br/><b>${Math.round(Number(it.value) * 100) / 100}</b>${unit}`
+        const v = Math.round(Number(it.value) * 100) / 100
+        return `${it.name}<br/><b>${v}</b>${unit}${unit === '分钟' ? `（${formatDuration(v * 60)}）` : ''}`
       },
     }),
     grid: { left: 96, right: 24, top: 6, bottom: 20 },

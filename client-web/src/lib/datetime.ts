@@ -96,10 +96,14 @@ export function dayEndIso(d: Date): string {
 /** 秒数 → 中文时长（"2 小时 5 分"/"48 分钟"） */
 export function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null || seconds <= 0) return '0 分钟'
-  const total = Math.round(seconds / 60)
-  const h = Math.floor(total / 60)
-  const m = total % 60
-  if (h && m) return `${h} 小时 ${m} 分`
-  if (h) return `${h} 小时`
+  const total = Math.round(seconds)
+  if (total < 60) return `${total} 秒`
+  // 秒按四舍五入并入分；天/时/分从最高非零段起连续显示，尾随零段省略
+  const totalMin = Math.round(total / 60)
+  const d = Math.floor(totalMin / 1440)
+  const h = Math.floor((totalMin % 1440) / 60)
+  const m = totalMin % 60
+  if (d > 0) return m > 0 ? `${d} 天 ${h} 时 ${m} 分` : `${d} 天 ${h} 时`
+  if (h > 0) return m > 0 ? `${h} 小时 ${m} 分` : `${h} 小时`
   return `${m} 分钟`
 }
