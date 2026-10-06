@@ -234,6 +234,17 @@ export interface HabitRoutine {
   cadence: HabitCadence
   source: string
   status: string
+  /** 习惯描述（PR #356 新增，末位字段） */
+  description: string | null
+}
+
+/** PUT /calendar/habits/{id} 请求体：部分更新——null/缺省=保持原值 */
+export interface UpdateHabitRequest {
+  title?: string | null
+  description?: string | null
+  cadence?: string | null
+  status?: string | null
+  ruleJson?: string | null
 }
 
 /* ── AI 排程占位（工作台） ─────────────────────────────────── */

@@ -39,6 +39,8 @@ export interface HeatmapGridBucket {
   start: string
   end: string
   hour: number
+  /** 业务日 yyyy-MM-dd（hour/day/month/year 四维度一律返回；本地 00:00–03:59 桶按 start 推会归错天，必须读此字段） */
+  businessDay: string
   /** 该桶活跃分钟（day/month/year 维度现在有值） */
   activeMinutes: number
   totalEvents: number

@@ -202,8 +202,19 @@ export const habitsApi = {
     // 后端 HabitCadence 按数字序列化（Daily=0/Weekly=1/Monthly=2/Custom=3），归一为字符串
     return list.map((h) => ({ ...h, cadence: normalizeHabitCadence(h.cadence) }))
   },
+  get: async (id: string) => {
+    const h = await apiGet<import('./types').HabitRoutine>(`/api/v1/calendar/habits/${id}`)
+    return { ...h, cadence: normalizeHabitCadence(h.cadence) }
+  },
   create: (body: { title: string; cadence?: string; ruleJson?: string }) =>
     apiPost<import('./types').HabitRoutine>('/api/v1/calendar/habits', body),
+  /** 部分更新语义：null/缺省字段保持原值；description 空串=清空；ruleJson 空白=落 "{}" */
+  update: (id: string, body: import('./types').UpdateHabitRequest) =>
+    apiPut<import('./types').HabitRoutine>(`/api/v1/calendar/habits/${id}`, body),
+  /** 软删除（幂等）：历史 occurrence 一并软删，日历图层 habits 同步消失 */
+  remove: (id: string) => apiDelete<{ id: string }>(`/api/v1/calendar/habits/${id}`),
+  /** 归档：只改 status=Archived，历史 occurrence 保留可审计 */
+  archive: (id: string) => apiPost<import('./types').HabitRoutine>(`/api/v1/calendar/habits/${id}/archive`, {}),
 }
 
 /* ── AI 排程建议（工作台） ─────────────────────────────────── */

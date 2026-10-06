@@ -29,8 +29,12 @@ interface InspectionRule {
   criterion: string
   rationale: string
   totalViolations: number
-  newViolations: number
+  /** 窗内违规（决定颜色）；旧名 newViolations 已下线（PR #361） */
+  windowViolations: number
+  /** 历史欠账（只计数，不参与颜色判定；含绿灯尺子的欠账） */
   historicalViolations: number
+  /** 仅 S3 返回：本次取数实际覆盖的业务日数 */
+  scanCoveredDays: number | null
   samples: string[]
 }
 
@@ -39,8 +43,14 @@ interface InspectionReport {
   redCount: number
   yellowCount: number
   greenCount: number
+  /** ≡ windowViolations（总览违规只由窗内违规产生） */
   totalViolations: number
-  newViolations: number
+  /** 历史欠账合计（含绿灯尺子的欠账） */
+  historicalViolations: number
+  /** 考核线 = max(体检时刻 − 考核窗, 进程启动时刻) */
+  assessmentStartUtc: string
+  /** 生效考核窗时长（小时），默认 168（7 天） */
+  assessmentWindowHours: number
   rules: InspectionRule[]
   message: string
 }
@@ -74,7 +84,11 @@ export function DataReliabilityPage() {
     <div>
       <PageHeader
         title="数据可信度"
-        subtitle={report.data ? `体检于 ${formatTime(report.data.inspectedAtUtc)}` : '13 条尺子数据体检'}
+        subtitle={
+          report.data
+            ? `体检于 ${formatTime(report.data.inspectedAtUtc)} · 考核线 ${formatTime(report.data.assessmentStartUtc)} 起`
+            : '13 条尺子数据体检（红黄绿只由窗内违规决定，历史欠账只计数）'
+        }
         actions={
           <Button variant="primary" size="sm" loading={refresh.isPending} onClick={() => refresh.mutate()}>
             <RefreshCw className="size-4" aria-hidden /> 重新体检
@@ -87,7 +101,12 @@ export function DataReliabilityPage() {
           <Tile label="红灯" value={report.data.redCount} tone="crit" />
           <Tile label="黄灯" value={report.data.yellowCount} tone="warn" />
           <Tile label="绿灯" value={report.data.greenCount} tone="ok" />
-          <Tile label="违规总数" value={report.data.totalViolations} tone={report.data.totalViolations > 0 ? 'warn' : 'ok'} hint={`新增 ${report.data.newViolations}`} />
+          <Tile
+            label="窗内违规"
+            value={report.data.totalViolations}
+            tone={report.data.totalViolations > 0 ? 'warn' : 'ok'}
+            hint={`历史欠账 ${report.data.historicalViolations} · 考核窗 ${report.data.assessmentWindowHours}h`}
+          />
         </div>
       )}
 
@@ -111,8 +130,9 @@ export function DataReliabilityPage() {
                     </StatusBadge>
                     <span className="min-w-0 flex-1 truncate text-[13px] text-text-1">{r.name}</span>
                     <span className="tnum shrink-0 text-xs text-text-3">{r.currentValueLabel ?? '—'}</span>
-                    <span className={cn('tnum shrink-0 text-xs', r.totalViolations > 0 ? 'text-warn' : 'text-text-4')}>
-                      违规 {r.totalViolations}
+                    <span className={cn('tnum shrink-0 text-xs', r.windowViolations > 0 ? 'text-warn' : 'text-text-4')}>
+                      窗内 {r.windowViolations}
+                      {r.historicalViolations > 0 && <span className="text-text-4"> / 欠账 {r.historicalViolations}</span>}
                     </span>
                   </button>
                 ))}
@@ -132,7 +152,9 @@ export function DataReliabilityPage() {
                 <Section label="判据">{detailRule.criterion}</Section>
                 <Section label="为什么这么定">{detailRule.rationale}</Section>
                 <Section label="当前情况">
-                  {detailRule.currentValueLabel ?? '—'} · 违规 {detailRule.totalViolations}（新增 {detailRule.newViolations} / 历史 {detailRule.historicalViolations}）
+                  {detailRule.currentValueLabel ?? '—'} · 违规合计 {detailRule.totalViolations}
+                  （窗内 {detailRule.windowViolations} / 历史欠账 {detailRule.historicalViolations}）
+                  {detailRule.scanCoveredDays != null && ` · 本次覆盖 ${detailRule.scanCoveredDays} 个业务日`}
                 </Section>
                 <div>
                   <Label>违规样例（前 10 条）</Label>
@@ -145,12 +167,13 @@ export function DataReliabilityPage() {
                   variant="secondary"
                   size="sm"
                   onClick={async () => {
-                    const res = await apiGet<{ items: { ruleCode: string; id: string; deviceId: string; occurredAtUtc: string; fields: Record<string, string> }[]; totalCount: number; truncated: boolean }>(
+                    const res = await apiGet<{ items: { ruleCode: string; id: string; deviceId: string; occurredAtUtc: string; isNew: boolean; fields: Record<string, string> }[]; totalCount: number; truncated: boolean }>(
                       `/api/v1/data-reliability/rules/${encodeURIComponent(detailRule.code)}/violations?limit=2000`,
                     )
                     downloadCsv(
                       `${detailRule.code}-violations.csv`,
-                      res.items.map((v) => ({ 尺子: v.ruleCode, ID: v.id, 设备: v.deviceId, 时间: v.occurredAtUtc, ...v.fields })),
+                      // isNew：true=窗内（考核线之后），false=历史欠账（PR #361）
+                      res.items.map((v) => ({ 尺子: v.ruleCode, ID: v.id, 设备: v.deviceId, 时间: v.occurredAtUtc, 窗内: v.isNew ? '是' : '否', ...v.fields })),
                     )
                     notifySuccess(`已导出 ${res.items.length} 条${res.truncated ? '（已截断）' : ''}`)
                   }}

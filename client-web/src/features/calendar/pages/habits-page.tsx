@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Plus, Repeat } from 'lucide-react'
-import { useCreateHabit, useHabits } from '../queries'
+import { Archive, Pencil, Plus, Repeat, Trash2 } from 'lucide-react'
+import { useArchiveHabit, useCreateHabit, useDeleteHabit, useHabits, useUpdateHabit } from '../queries'
+import type { HabitRoutine } from '../types'
 import { notifySuccess } from '@/lib/notify'
 import { CADENCE_LABEL } from '@/lib/enums'
 import { Stagger, StaggerItem } from '@/components/motion/primitives'
-import { Button, Card, CardTitle, EmptyState, Input, Label, PageHeader, Segmented, Select, StatusBadge } from '@/components/ui'
+import { Button, Card, CardTitle, Dialog, DialogBody, DialogFooter, DialogHeader, DialogContent, EmptyState, Input, Label, PageHeader, Segmented, Select, StatusBadge, TwoStepButton } from '@/components/ui'
 
 type Tab = 'active' | 'planned' | 'archived'
 
@@ -19,8 +20,42 @@ export function HabitsPage() {
   const [tab, setTab] = useState<Tab>('active')
   const { data: habits = [] } = useHabits()
   const create = useCreateHabit()
+  const update = useUpdateHabit()
+  const archive = useArchiveHabit()
+  const remove = useDeleteHabit()
   const [title, setTitle] = useState('')
   const [cadence, setCadence] = useState('Daily')
+  /* 编辑弹窗状态（null=关闭） */
+  const [editing, setEditing] = useState<HabitRoutine | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDesc, setEditDesc] = useState('')
+  const [editCadence, setEditCadence] = useState('Daily')
+
+  function openEdit(h: HabitRoutine) {
+    setEditing(h)
+    setEditTitle(h.title)
+    setEditDesc(h.description ?? '')
+    setEditCadence(h.cadence)
+  }
+
+  function saveEdit() {
+    if (!editing) return
+    const t = editTitle.trim()
+    if (!t) return
+    update.mutate(
+      {
+        id: editing.id,
+        // 部分更新：三项都发；description 空串=显式清空（契约 §2.3）
+        body: { title: t, description: editDesc.trim(), cadence: editCadence },
+      },
+      {
+        onSuccess: () => {
+          notifySuccess('习惯已更新')
+          setEditing(null)
+        },
+      },
+    )
+  }
 
   const filtered = habits.filter((h) =>
     tab === 'archived' ? h.status === 'Archived' : tab === 'active' ? h.status === 'Active' : h.source !== 'manual',
@@ -76,24 +111,77 @@ export function HabitsPage() {
             </Card>
           ) : (
             <Stagger className="space-y-3">
-              {filtered.map((h, i) => (
-                <StaggerItem key={h.id} index={i}>
-                  <Card className="flex items-center gap-3 p-4">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-ctl bg-primary-soft text-primary">
-                      <Repeat className="size-4" aria-hidden />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-text-1">{h.title}</div>
-                      <div className="text-xs text-text-3">
-                        {CADENCE_LABEL[h.cadence] ?? h.cadence} · 来源 {h.source}
+              {filtered.map((h, i) => {
+                const archived = h.status.toLowerCase() === 'archived'
+                return (
+                  <StaggerItem key={h.id} index={i}>
+                    <Card className="flex items-start gap-3 p-4">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-ctl bg-primary-soft text-primary">
+                        <Repeat className="size-4" aria-hidden />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-text-1">{h.title}</div>
+                        {h.description && <div className="mt-0.5 line-clamp-2 text-xs text-text-3">{h.description}</div>}
+                        <div className="mt-0.5 text-xs text-text-4">
+                          {CADENCE_LABEL[h.cadence] ?? h.cadence} · 来源 {h.source}
+                        </div>
                       </div>
-                    </div>
-                    <StatusBadge tone={h.status === 'Active' ? 'ok' : 'neutral'} dot={false}>
-                      {h.status === 'Active' ? '执行中' : h.status}
-                    </StatusBadge>
-                  </Card>
-                </StaggerItem>
-              ))}
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <StatusBadge tone={archived ? 'neutral' : 'ok'} dot={false}>
+                          {archived ? '已归档' : '执行中'}
+                        </StatusBadge>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(h)} title="编辑">
+                            <Pencil className="size-3.5" aria-hidden /> 编辑
+                          </Button>
+                          {archived ? (
+                            /* 无独立恢复端点：PUT 部分更新把 status 设回 Active */
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              loading={update.isPending}
+                              onClick={() =>
+                                update.mutate(
+                                  { id: h.id, body: { status: 'Active' } },
+                                  { onSuccess: () => notifySuccess('已恢复执行') },
+                                )
+                              }
+                            >
+                              恢复执行
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              loading={archive.isPending}
+                              onClick={() =>
+                                archive.mutate(h.id, {
+                                  onSuccess: () => notifySuccess('已归档（历史投射保留，日历图层移除）'),
+                                })
+                              }
+                              title="归档：历史 occurrence 保留，日历图层移除"
+                            >
+                              <Archive className="size-3.5" aria-hidden /> 归档
+                            </Button>
+                          )}
+                          {/* 软删除会连历史 occurrence 一并移除且不可逆——两步武装确认 */}
+                          <TwoStepButton
+                            armLabel="确认删除？"
+                            className="px-2 text-text-4 hover:text-crit"
+                            onConfirm={() =>
+                              remove.mutate(h.id, {
+                                onSuccess: () => notifySuccess('已删除（含历史投射）'),
+                              })
+                            }
+                          >
+                            <Trash2 className="size-3.5" aria-hidden />
+                          </TwoStepButton>
+                        </div>
+                      </div>
+                    </Card>
+                  </StaggerItem>
+                )
+              })}
             </Stagger>
           )}
           <Card className="p-4">
@@ -102,6 +190,48 @@ export function HabitsPage() {
           </Card>
         </div>
       </div>
+
+      {/* 编辑习惯（PUT 部分更新：title/description/cadence 三项全发；描述空串=清空） */}
+      <Dialog open={editing != null} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-[420px]">
+          <DialogHeader title="编辑习惯" description="部分更新：只提交此处修改的字段" />
+          <DialogBody className="space-y-3">
+            <div>
+              <Label htmlFor="habit-edit-title">标题</Label>
+              <Input
+                id="habit-edit-title"
+                value={editTitle}
+                maxLength={255}
+                onChange={(e) => setEditTitle(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="habit-edit-desc">描述</Label>
+              <Input
+                id="habit-edit-desc"
+                placeholder="可选；清空文本框并保存即清除描述"
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="habit-edit-cadence">频率</Label>
+              <Select
+                id="habit-edit-cadence"
+                value={editCadence}
+                onValueChange={setEditCadence}
+                options={CADENCE_OPTIONS}
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setEditing(null)}>取消</Button>
+            <Button variant="primary" loading={update.isPending} disabled={!editTitle.trim()} onClick={saveEdit}>
+              保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

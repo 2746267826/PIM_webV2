@@ -9,7 +9,10 @@ export interface FileProvider {
   accountId: string | null
   accountName: string | null
   syncStatus: 'idle' | 'syncing' | 'error'
+  /** 最近一次同步运行中应用（新增/更新）的条目数，每次运行覆盖写入；0 不代表失败 */
   syncedItemCount: number
+  /** 当前已索引条目总量（排除软删除）；变更前服务端无此字段 → 视为「总量未知」而非 0 */
+  totalIndexedCount?: number | null
   lastSyncAt: string | null
   lastError: string | null
   tokenExpiresAt: string | null
@@ -48,7 +51,10 @@ export interface SyncStatus {
   syncStatus: 'idle' | 'syncing' | 'error'
   lastError: string | null
   lastSyncAt: string | null
+  /** 最近一次同步运行中应用的条目数；0 不代表失败 */
   syncedItemCount: number
+  /** 当前已索引条目总量；变更前服务端无此字段 → 视为「总量未知」 */
+  totalIndexedCount?: number | null
 }
 
 export interface OneDriveBindingStart {

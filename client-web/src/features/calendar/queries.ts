@@ -375,6 +375,48 @@ export function useCreateHabit() {
   })
 }
 
+/*
+ * 习惯管理（PR #356）：编辑 / 归档 / 删除。
+ * 归档与删除都会让该习惯的 occurrence 从日历 habits 图层与今日分区消失，
+ * 因此除 habits 列表外一并失效图层与今日聚合。
+ */
+export function useUpdateHabit() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: import('./types').UpdateHabitRequest }) =>
+      import('./api').then((m) => m.habitsApi.update(id, body)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['calendar', 'habits'] })
+      void qc.invalidateQueries({ queryKey: ['calendar', 'layers'] })
+      void qc.invalidateQueries({ queryKey: ['today'] })
+    },
+  })
+}
+
+export function useArchiveHabit() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => import('./api').then((m) => m.habitsApi.archive(id)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['calendar', 'habits'] })
+      void qc.invalidateQueries({ queryKey: ['calendar', 'layers'] })
+      void qc.invalidateQueries({ queryKey: ['today'] })
+    },
+  })
+}
+
+export function useDeleteHabit() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => import('./api').then((m) => m.habitsApi.remove(id)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['calendar', 'habits'] })
+      void qc.invalidateQueries({ queryKey: ['calendar', 'layers'] })
+      void qc.invalidateQueries({ queryKey: ['today'] })
+    },
+  })
+}
+
 export function useGenerateReport() {
   const qc = useQueryClient()
   return useMutation({

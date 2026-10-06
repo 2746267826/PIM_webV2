@@ -577,7 +577,8 @@ function OneDriveTab({ onChanged }: { onChanged: () => void }) {
               <div className="mono space-y-0.5 text-[11px] text-text-4">
                 <div className="break-all">driveId: {provider.driveId ?? '—'}</div>
                 <div className="break-all">Client ID: {provider.clientId ?? '—'}</div>
-                <div>已同步条目: {provider.syncedItemCount.toLocaleString()}</div>
+                <div>本次同步应用: {provider.syncedItemCount.toLocaleString()}（0 不代表失败）</div>
+                <div>已索引总量: {provider.totalIndexedCount != null ? provider.totalIndexedCount.toLocaleString() : '未知'}</div>
                 {provider.lastSyncAt && <div>最近同步: {formatTime(provider.lastSyncAt)}</div>}
               </div>
               <div className="flex flex-wrap gap-2 pt-1">
@@ -657,7 +658,8 @@ function OneDriveTab({ onChanged }: { onChanged: () => void }) {
             </StatusBadge>
           </div>
           <div className="mt-2 space-y-1 text-xs text-text-3">
-            <div>已同步条目：{syncStatus.data?.syncedItemCount?.toLocaleString() ?? '—'}</div>
+            <div>本次同步应用：{syncStatus.data?.syncedItemCount?.toLocaleString() ?? '—'}（0 不代表失败）</div>
+            <div>已索引总量：{syncStatus.data?.totalIndexedCount != null ? syncStatus.data.totalIndexedCount.toLocaleString() : '未知'}</div>
             <div>最近完成：{syncStatus.data?.lastSyncAt ? formatTime(syncStatus.data.lastSyncAt) : '—'}</div>
             {syncStatus.data?.lastError && <div className="text-crit">{syncStatus.data.lastError}</div>}
           </div>
@@ -718,8 +720,12 @@ function OneDriveTab({ onChanged }: { onChanged: () => void }) {
             </span>
           </div>
           <div className="flex justify-between gap-3 border-b border-divider py-1.5">
-            <span className="text-text-3">已同步条目</span>
+            <span className="text-text-3">本次同步应用</span>
             <span className="tnum font-medium text-text-1">{syncStatus.data?.syncedItemCount?.toLocaleString() ?? '—'}</span>
+          </div>
+          <div className="flex justify-between gap-3 border-b border-divider py-1.5">
+            <span className="text-text-3">已索引总量</span>
+            <span className="tnum font-medium text-text-1">{syncStatus.data?.totalIndexedCount != null ? syncStatus.data.totalIndexedCount.toLocaleString() : '未知'}</span>
           </div>
           <div className="flex justify-between gap-3 border-b border-divider py-1.5">
             <span className="text-text-3">最近同步完成</span>

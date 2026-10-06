@@ -163,9 +163,10 @@ export function PcTrackerPage() {
     const merged = new Map<string, { date: string; value: number }>()
     for (const row of grid) {
       for (const b of row ?? []) {
-        const ms = Date.parse(b.start)
-        if (Number.isNaN(ms)) continue
-        const day = new Date(ms + 8 * 3600_000).toISOString().slice(0, 10)
+        // 优先读服务端 businessDay：业务日 00:00–03:59 的 hour 桶 start 落在次日 UTC，
+        // 按 +08:00 推算会归错天（PR #370 后该字段四维度必返）
+        const day = 'businessDay' in b && b.businessDay ? b.businessDay : new Date(Date.parse(b.start) + 8 * 3600_000).toISOString().slice(0, 10)
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) continue
         const prev = merged.get(day)
         if (prev) prev.value += Math.round(b.keyPressCount)
         else merged.set(day, { date: day, value: Math.round(b.keyPressCount) })
