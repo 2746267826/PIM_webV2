@@ -179,7 +179,22 @@ function TrackMap({
     if (!track) return []
     return track.segments
       .filter((s) => s.path.length > 1)
-      .map((s) => ({ id: s.id, kind: s.kind, points: s.path.map((p) => [p.latitude, p.longitude] as [number, number]) }))
+      .map((s) => {
+        let pts = s.path.map((p) => [p.latitude, p.longitude] as [number, number])
+        /*
+         * 抽稀：单段原始点可达数千（30 天可上万），SVG 逐点投影会让平移/缩放卡顿。
+         * 等距抽稀到 ≤600 点并强制保留末点——城市级缩放（zoom 14）下视觉无差。
+         */
+        const MAX = 600
+        if (pts.length > MAX) {
+          const stride = Math.ceil(pts.length / MAX)
+          const decimated: [number, number][] = []
+          for (let i = 0; i < pts.length; i += stride) decimated.push(pts[i]!)
+          if (decimated[decimated.length - 1] !== pts[pts.length - 1]) decimated.push(pts[pts.length - 1]!)
+          pts = decimated
+        }
+        return { id: s.id, kind: s.kind, points: pts }
+      })
   }, [track])
 
   const stays = useMemo(() => {
@@ -214,6 +229,7 @@ function TrackMap({
           zoom={14}
           className="h-full w-full"
           scrollWheelZoom
+          preferCanvas
         >
           <Recenter target={center} />
           <TileLayer url={apiUrl('/api/v1/tiles/{z}/{x}/{y}.png')} attribution="&copy; OpenStreetMap (PIM proxy)" />
