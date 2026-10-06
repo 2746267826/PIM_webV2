@@ -324,10 +324,10 @@ export function GitHubHeatmap({
           )}
 
           {/* 图例 */}
-          <div className="mt-2 flex items-center justify-end gap-1.5 text-[10px] text-text-4">
+          <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-text-4">
             <span>少</span>
             {ramp.map((c) => (
-              <span key={c} className="rounded-[2px]" style={{ width: size, height: size, backgroundColor: c }} />
+              <span key={c} className="rounded-[2px]" style={{ width: 10, height: 10, backgroundColor: c }} />
             ))}
             <span>多</span>
           </div>
@@ -408,10 +408,10 @@ export function HeatMatrix({
             })}
           </div>
         ))}
-        <div className="mt-2 flex items-center justify-end gap-1.5 text-[10px] text-text-4">
+        <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-text-4">
           <span>少</span>
           {ramp.map((c) => (
-            <span key={c} className="rounded-[2px]" style={{ width: cellSize, height: cellSize, backgroundColor: c }} />
+            <span key={c} className="rounded-[2px]" style={{ width: 10, height: 10, backgroundColor: c }} />
           ))}
           <span>多</span>
         </div>
