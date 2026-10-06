@@ -27,9 +27,10 @@ function failureMessage(err: unknown, url: string): string {
     /^https?:\/\//i.test(url) &&
     !url.startsWith(window.location.origin)
   if (crossOrigin) {
-    return `浏览器直连被拦截（${detail}）。最常见原因是服务器未返回 CORS 允许头：`
+    return `浏览器直连被拦截（${detail}）。该源不在服务器的 CORS 白名单里：`
       + '同源部署请留空地址（走当前部署源）；App/桌面壳不受此限制；'
-      + `浏览器跨域使用需服务端把本源（${window.location.origin}）加入 CORS 白名单。`
+      + `浏览器跨域使用需服务端把本源（${window.location.origin}）加入 CORS 白名单`
+      + '（测试 API 已放行 http://127.0.0.1:3000）。'
   }
   return `无法连接：${detail}`
 }
@@ -113,7 +114,7 @@ export function ServerForm({ mode }: { mode: 'setup' | 'settings' }) {
           }}
         />
         <p className="mt-1.5 text-xs text-text-3">
-          留空 = 使用当前部署源（浏览器同源场景默认）。填服务器源地址（协议://主机:端口），
+          留空 = 使用当前部署源（浏览器同源场景默认）。填服务器源地址（协议://主机:端口，
           例如<span className="mono mx-1">http://192.168.1.10:5858</span>；误带
           <span className="mono mx-1">/api/v1</span>后缀会自动去掉。
         </p>
