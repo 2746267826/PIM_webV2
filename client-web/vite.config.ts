@@ -16,6 +16,23 @@ const API_TARGET = process.env.PIM_API_TARGET ?? 'http://localhost:5858'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  /*
+   * 重依赖启动即预打包：否则首次访问对应页面时才会「发现新依赖 → 重新优化 →
+   * 整页重载」，表现为冷加载秒级白屏/卡死（历史上位置页的 Leaflet 即此症状）。
+   */
+  optimizeDeps: {
+    include: [
+      'leaflet',
+      'react-leaflet',
+      '@fullcalendar/react',
+      '@fullcalendar/daygrid',
+      '@fullcalendar/timegrid',
+      '@fullcalendar/list',
+      '@fullcalendar/interaction',
+      'motion',
+      'echarts/core',
+    ],
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

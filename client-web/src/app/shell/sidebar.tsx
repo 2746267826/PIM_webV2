@@ -37,6 +37,7 @@ function NavItemButton({
       <Link
         to={item.to}
         viewTransition
+        prefetch="intent"
         title={item.label}
         aria-label={item.label}
         aria-current={active ? 'page' : undefined}
@@ -56,6 +57,7 @@ function NavItemButton({
     <Link
       to={item.to}
       viewTransition
+      prefetch="intent"
       aria-current={active ? 'page' : undefined}
       onClick={onNavigate}
       className={cn(
