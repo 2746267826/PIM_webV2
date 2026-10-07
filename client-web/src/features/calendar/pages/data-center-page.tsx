@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
 import { Download, History, ScrollText } from 'lucide-react'
 import { dataCenterApi } from '../api'
 import { useDataCenterQuery } from '../queries'
@@ -28,12 +27,12 @@ const OBJECT_TYPES = [
 
 /** 数据中心（02 §data-center：跨对象查询 + 详情 + 恢复预览 + 审计导出） */
 export function DataCenterPage() {
-  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [objectType, setObjectType] = useState('')
   const [page, setPage] = useState(1)
   const [detail, setDetail] = useState<{ item: DataCenterItem } | null>(null)
   const [auditVersions, setAuditVersions] = useState<AuditVersionItem[] | null>(null)
+  const [showAllVersions, setShowAllVersions] = useState(false)
   const [preview, setPreview] = useState<{ summary: string; changedFields: string[]; beforeJson: string | null; afterJson: string | null } | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
 
@@ -51,6 +50,7 @@ export function DataCenterPage() {
     if (!detail) return
     let cancelled = false
     setAuditVersions(null)
+    setShowAllVersions(false)
     auditApi
       .timeline(detail.item.objectType, detail.item.objectId)
       .then((res) => !cancelled && setAuditVersions(res.items))
@@ -189,49 +189,46 @@ export function DataCenterPage() {
                     )}
                   </div>
                   {auditVersions != null && auditVersions.length > 0 && (
-                    <ul className="mt-2 space-y-1.5">
-                      {[...auditVersions].reverse().slice(0, 8).map((v) => {
-                        let changed: string[] = []
-                        try { changed = JSON.parse(v.changedFieldsJson) as string[] } catch { /* 忽略解析失败 */ }
-                        return (
-                          <li key={v.id} className="rounded-ctl bg-surface px-2.5 py-1.5 text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-text-1">{v.actor || v.source}</span>
-                              <span className="tnum ml-auto text-text-4">{formatTime(v.createdAt)}</span>
-                            </div>
-                            {changed.length > 0 && <div className="mt-0.5 text-text-3">变更：{changed.join('、')}</div>}
-                          </li>
-                        )
-                      })}
+                    <>
+                      <ul className="mt-2 space-y-1.5">
+                        {(showAllVersions ? [...auditVersions].reverse() : [...auditVersions].reverse().slice(0, 8)).map((v) => {
+                          let changed: string[] = []
+                          try { changed = JSON.parse(v.changedFieldsJson) as string[] } catch { /* 忽略解析失败 */ }
+                          return (
+                            <li key={v.id} className="rounded-ctl bg-surface px-2.5 py-1.5 text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-text-1">{v.actor || v.source}</span>
+                                <span className="tnum ml-auto text-text-4">{formatTime(v.createdAt)}</span>
+                              </div>
+                              {changed.length > 0 && <div className="mt-0.5 text-text-3">变更：{changed.join('、')}</div>}
+                            </li>
+                          )
+                        })}
+                      </ul>
                       {auditVersions.length > 8 && (
-                        <li className="text-center text-[11px] text-text-4">仅显示最近 8 条，共 {auditVersions.length} 条</li>
+                        <button
+                          type="button"
+                          onClick={() => setShowAllVersions((v) => !v)}
+                          className="mt-1.5 w-full rounded-ctl py-1 text-center text-xs text-primary outline-none hover:bg-surface"
+                        >
+                          {showAllVersions ? '收起' : `展开全部 ${auditVersions.length} 条`}
+                        </button>
                       )}
-                    </ul>
+                    </>
                   )}
                   {auditVersions != null && auditVersions.length === 0 && (
                     <p className="mt-1.5 text-xs text-text-4">该对象未经应用内修改（如 Outlook 同步直接写入），没有审计版本。</p>
                   )}
                 </div>
 
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => navigate(`/audit/${encodeURIComponent(detail.item.objectType)}/${encodeURIComponent(detail.item.objectId)}`)}
-                  >
-                    <ScrollText className="size-4" aria-hidden /> 完整时间线
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="flex-1"
-                    loading={previewLoading}
-                    onClick={() => void openRestorePreview(detail.item.objectType, detail.item.objectId)}
-                  >
-                    <History className="size-4" aria-hidden /> 恢复预览
-                  </Button>
-                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={previewLoading}
+                  onClick={() => void openRestorePreview(detail.item.objectType, detail.item.objectId)}
+                >
+                  <History className="size-4" aria-hidden /> 恢复预览
+                </Button>
                 {preview && (
                   <div className="space-y-3">
                     <InlineAlert tone={preview.changedFields.length > 0 ? 'warn' : 'info'} title="恢复预览">
