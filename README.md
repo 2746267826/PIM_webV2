@@ -1,4 +1,4 @@
-# PIM Web（PIM_webV2）
+# pim-web
 
 个人信息管理（PIM）系统的 Web 前端：一套 **React 19 SPA**，同时服务桌面浏览器、Windows 桌面壳（Tauri 2）与 Android 壳（Capacitor 8）。由 [`frontend-rebuild-spec/`](frontend-rebuild-spec/README.md) 规格文档独立重建而成——规格只描述模块、接口与数据行为，不含视觉实现。
 
@@ -114,3 +114,29 @@ npm run test             # vitest：146 例（网络层/桥/图表模型/业务�
 - [client-web/README.md](client-web/README.md)（开发细节：本机构建验证记录、脚本说明、目录）
 - [docs/DESIGN.md](client-web/docs/DESIGN.md) / [docs/CONVENTIONS.md](client-web/docs/CONVENTIONS.md)
 - [docs/backend-issues.md](docs/backend-issues.md)（后端问题清单与修复回归记录）
+
+## 本仓结构
+
+| 路径 | 内容 |
+| --- | --- |
+| `client-web/` | 当前前端（features 分域），含双壳 `src-tauri/`（Windows）与 `android/`（Capacitor） |
+| `frontend-rebuild-spec/` | 重建规格（模块 × 接口 × 数据行为）——前端约定的**唯一来源** |
+| `legacy/` | 原版前端与其测试的快照（保持原仓库相对路径）——**逐页替换，替换一页删一页** |
+| `docs/` | 前端设计与工程约定、后端问题清单 |
+
+## 接口契约
+
+接口类型由 `pim-api` 的 `contract/openapi.json` 生成。契约变更后重新生成，字段不符会在 `tsc` 阶段直接报错，无需等联调。
+
+## 相关仓库
+
+| 仓库 | 角色 |
+| --- | --- |
+| [pim-api](https://github.com/2746267826/pim-api) | 后端 + MCP + 部署 + 契约出口 |
+| [pim-android](https://github.com/2746267826/pim-android) | 安卓采集端 |
+| [pim-windows](https://github.com/2746267826/pim-windows) | Windows 守护 + 浏览器扩展 |
+| [pim-docs](https://github.com/2746267826/pim-docs) | 文档与归档（private） |
+
+## 贡献约定
+
+所有改动走分支 + Pull Request；提交信息与 PR 描述双语（英文 + 简体中文）。详见 [`AGENTS.md`](AGENTS.md)。
