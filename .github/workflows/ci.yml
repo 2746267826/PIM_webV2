@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      artifact_slug: ${{ steps.ver.outputs.artifact_slug }}
+      git_sha_short: ${{ steps.ver.outputs.git_sha_short }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: ver
+        uses: ./.github/actions/resolve-version
+        with:
+          pr_number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
+
+  # 前端本体：类型检查 + 构建 + 单元测试。
+  # 双壳（Tauri / Capacitor）的打包需要 Windows runner 与 Android SDK，
+  # 不在本 job 内，另行按需接入。
+  build-web:
+    needs: [resolve-version]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: client-web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build (tsc -b && vite build)
+        run: npm run build
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pim-web-v${{ needs.resolve-version.outputs.artifact_slug }}
+          path: client-web/dist
+          if-no-files-found: error
+          retention-days: 14
+
+  # 汇总门禁：任一子任务失败即整体失败，避免"看起来绿了"。
+  gate:
+    name: CI Gate
+    needs: [resolve-version, build-web]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate required jobs
+        env:
+          R_RESOLVE: ${{ needs.resolve-version.result }}
+          R_WEB: ${{ needs.build-web.result }}
+        run: |
+          set -uo pipefail
+          fail=0
+          check () {
+            local label="$1" result="$2"
+            if [ "$result" = "success" ]; then
+              echo "✅ $label — success"
+            else
+              echo "❌ $label — ${result:-<missing>}"
+              fail=1
+            fi
+          }
+          check "resolve-version" "$R_RESOLVE"
+          check "build-web" "$R_WEB"
+
+          if [ "$fail" -ne 0 ]; then
+            echo ""
+            echo "::error::CI Gate 未通过：存在失败或未产生结果的必需 job。"
+            exit 1
+          fi
+          echo ""
+          echo "CI Gate 通过：所有必需 job 均成功。"
