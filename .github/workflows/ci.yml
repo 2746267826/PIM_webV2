@@ -14,6 +14,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+# 业务日口径与开发环境都是 Asia/Shanghai（04:00 起算）；测试里也用 +08:00
+# 构造事件，跑在 UTC runner 上会得到不同的本地小时而失败。
+env:
+  TZ: Asia/Shanghai
+
 jobs:
   resolve-version:
     runs-on: ubuntu-latest
@@ -31,9 +36,8 @@ jobs:
         with:
           pr_number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
 
-  # 前端本体：类型检查 + 构建 + 单元测试。
-  # 双壳（Tauri / Capacitor）的打包需要 Windows runner 与 Android SDK，
-  # 不在本 job 内，另行按需接入。
+  # 前端本体：lint + 单测 + 门禁自检 + 构建 + 打包。
+  # 双壳（Tauri / Capacitor）的打包需要 Windows runner 与 Android SDK，另行接入。
   build-web:
     needs: [resolve-version]
     runs-on: ubuntu-latest
@@ -58,16 +62,28 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      # 门禁自身也不许被架空：直接执行自检文件，而不是依赖它守护的那条链路。
+      - name: Frontend gate self-check
+        run: npx vitest run src/__tests__/ciFrontendGate.test.ts
+
       - name: Build (tsc -b && vite build)
         run: npm run build
+        env:
+          VITE_APP_VERSION: ${{ needs.resolve-version.outputs.version }}
+          VITE_GIT_SHA: ${{ needs.resolve-version.outputs.git_sha_short }}
 
-      - name: Upload dist artifact
+      # 产物交给 pim-api 打镜像时解包到 src/Pim.Api/wwwroot（部署形态：API 同源伺服 SPA）。
+      - name: Package web build
+        working-directory: ${{ github.workspace }}
+        run: tar -czf pim-web-v${{ needs.resolve-version.outputs.artifact_slug }}.tar.gz -C client-web/dist .
+
+      - name: Upload web build artifact
         uses: actions/upload-artifact@v4
         with:
           name: pim-web-v${{ needs.resolve-version.outputs.artifact_slug }}
-          path: client-web/dist
+          path: pim-web-v${{ needs.resolve-version.outputs.artifact_slug }}.tar.gz
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
 
   # 汇总门禁：任一子任务失败即整体失败，避免"看起来绿了"。
   gate:
