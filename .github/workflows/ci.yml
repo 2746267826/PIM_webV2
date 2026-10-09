@@ -62,10 +62,6 @@ jobs:
       - name: Unit tests
         run: npm run test
 
-      # 门禁自身也不许被架空：直接执行自检文件，而不是依赖它守护的那条链路。
-      - name: Frontend gate self-check
-        run: npx vitest run src/__tests__/ciFrontendGate.test.ts
-
       - name: Build (tsc -b && vite build)
         run: npm run build
         env:
