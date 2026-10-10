@@ -207,7 +207,7 @@ assert.ok(!dialog.includes('存量'), '弹窗不得再出现「存量」字样')
 assert.ok(dialog.includes('导出完整违规清单'), '弹窗应提供完整清单导出');
 assert.ok(dialog.includes('暂无违规样例'), '无样例时不得静默留白');
 assert.ok(
-  dialog.includes('https://github.com/2746267826/pim-platform/issues/249'),
+  dialog.includes('https://github.com/2746267826/pim-api/issues/249'),
   '弹窗应链接关联 issue'
 );
 assert.ok(!/一键修复/.test(dialog), '弹窗是只读的，不得提供一键修复');
