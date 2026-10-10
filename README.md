@@ -46,8 +46,8 @@ frontend-rebuild-spec/   重建规格（模块×接口×数据行为 + 字段级
 要求：Node ≥ 20（开发验证于 24）；后端可用（本地或测试服务器）。
 
 ```bash
-git clone https://github.com/2746267826/PIM_webV2.git
-cd PIM_webV2/client-web
+git clone https://github.com/2746267826/pim-web.git
+cd pim-web/client-web
 npm install
 cp .env.example .env      # 填 PIM_API_TARGET（后端地址）；QA 脚本另需 PIM_TEST_USER/PIM_TEST_PASS
 npm run dev               # http://127.0.0.1:3000（/api 代理到 PIM_API_TARGET）

@@ -15,7 +15,7 @@ import {
 } from './dataReliabilityModel';
 import StatusBadge from '../../ui/StatusBadge';
 
-const relatedIssueBaseUrl = 'https://github.com/2746267826/pim-platform/issues';
+const relatedIssueBaseUrl = 'https://github.com/2746267826/pim-api/issues';
 
 interface DataReliabilityRuleDialogProps {
   rule: DataReliabilityRuleReport | null;
