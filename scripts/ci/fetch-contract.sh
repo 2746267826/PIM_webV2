@@ -45,3 +45,9 @@ BANNER='// 本文件由 scripts/ci/fetch-contract.sh 自动生成，请勿手工
 } > "$OUT"
 
 echo "==> 已写入 $OUT（$(wc -l < "$OUT") 行）"
+
+# 同时把原始契约存进本仓 contract/，供开发时对照（不要手工编辑，见 contract/README.md）
+CONTRACT_SNAPSHOT="$ROOT/contract/openapi.json"
+mkdir -p "$(dirname "$CONTRACT_SNAPSHOT")"
+cp "$TMP/openapi.json" "$CONTRACT_SNAPSHOT"
+echo "==> 已更新契约快照 $CONTRACT_SNAPSHOT（$(wc -c < "$CONTRACT_SNAPSHOT") 字节）"
