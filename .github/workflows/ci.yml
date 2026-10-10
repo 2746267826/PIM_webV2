@@ -62,6 +62,20 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      # 契约新鲜度：前端类型由 pim-api 的 contract/openapi.json 生成。
+      # 契约变了而生成文件没跟上，说明接口形状已改，必须显式更新并提交。
+      - name: Verify client contract is up to date
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -uo pipefail
+          bash scripts/ci/fetch-contract.sh
+          if ! git diff --quiet -- client-web/src/api/generated.ts; then
+            echo "::error::client-web/src/api/generated.ts 与 pim-api 的契约不一致；请运行 scripts/ci/fetch-contract.sh 并提交结果。"
+            git --no-pager diff --stat -- client-web/src/api/generated.ts
+            exit 1
+          fi
+          echo "✅ 契约类型与 pim-api 一致"
+
       - name: Build (tsc -b && vite build)
         run: npm run build
         env:
