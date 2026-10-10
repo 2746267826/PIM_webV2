@@ -26,6 +26,7 @@ jobs:
       version: ${{ steps.ver.outputs.version }}
       artifact_slug: ${{ steps.ver.outputs.artifact_slug }}
       git_sha_short: ${{ steps.ver.outputs.git_sha_short }}
+      release_tag: ${{ steps.ver.outputs.release_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
